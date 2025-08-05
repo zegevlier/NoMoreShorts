@@ -1,21 +1,79 @@
 package me.zegs.nomoreshorts
 
 import android.accessibilityservice.AccessibilityService
+import android.content.SharedPreferences
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import me.zegs.nomoreshorts.models.BlockingMode
+import me.zegs.nomoreshorts.models.LimitType
+import me.zegs.nomoreshorts.models.PreferenceKeys
+import me.zegs.nomoreshorts.session.SessionManager
+import me.zegs.nomoreshorts.settings.SettingsManager
 
-class MyAccessibilityService : AccessibilityService() {
+class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnSharedPreferenceChangeListener {
 
     // A string storing the last found shorts content
     private var lastShortWatched: YouTubeShortsInfo? = null
+    private lateinit var settingsManager: SettingsManager
+    private lateinit var sessionManager: SessionManager
+    private var lastBackButtonTime: Long = 0
 
     override fun onServiceConnected() {
         super.onServiceConnected()
-        // Print a message when the service is connected
+        settingsManager = SettingsManager(this)
+        sessionManager = SessionManager(settingsManager)
+
+        // Setup session callbacks
+        sessionManager.onSessionReset = {
+            println("Session has been reset - limits cleared")
+        }
+
+        sessionManager.onLimitReached = {
+            println("Session limit reached - blocking shorts")
+            // Force close any current shorts
+            lastShortWatched?.let { closeShorts(it) }
+        }
+
+        settingsManager.addSharedPreferenceChangeListener(this)
         println("Accessibility Service Connected")
     }
 
+    override fun onDestroy() {
+        super.onDestroy()
+        if (::settingsManager.isInitialized) {
+            settingsManager.removeSharedPreferenceChangeListener(this)
+        }
+        if (::sessionManager.isInitialized) {
+            sessionManager.cleanup()
+        }
+    }
+
+    override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
+        // React to settings changes and update session scheduling if needed
+        when (key) {
+            PreferenceKeys.RESET_PERIOD_TYPE,
+            PreferenceKeys.RESET_PERIOD_MINUTES,
+            PreferenceKeys.LIMIT_TYPE,
+            PreferenceKeys.SWIPE_LIMIT_COUNT,
+            PreferenceKeys.TIME_LIMIT_MINUTES -> {
+                println("Session-related setting changed: $key")
+                if (::sessionManager.isInitialized) {
+                    sessionManager.updateResetSchedule()
+                }
+            }
+        }
+    }
+
+    private fun isAppEnabled(): Boolean {
+        return settingsManager.isAppEnabled && settingsManager.isInSchedule()
+    }
+
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
+        // Only process events if the app is enabled and in schedule
+        if (!::settingsManager.isInitialized || !isAppEnabled()) {
+            return
+        }
+
         event?.let {
             if (it.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
                 val rootNode = rootInActiveWindow
@@ -26,40 +84,105 @@ class MyAccessibilityService : AccessibilityService() {
                             println("Shorts content is the same as last watched, skipping")
                             return // Skip if the content is the same as the last watched
                         } else if (lastShortWatched != null) {
-                            println("New Shorts content detected: ${shortsInfo.title} by ${shortsInfo.account}")
-                            // Here you can handle the new shorts content, e.g., send a notification
-                            // We now press the back button to exit the shorts
-                            var shortsClosed = false
-                            if (shortsInfo.backButton != null) {
-                                val backButton = shortsInfo.backButton
-                                if (backButton.isClickable) {
-                                    println("Pressing back button to exit shorts")
-                                    backButton.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                                    shortsClosed = true
-                                }
-                            }
-                            if (!shortsClosed) {
-                                // We couldn't close shorts with the normal back button, so we'll trigger a global back action
-                                println("Couldn't close shorts with the back button, triggering global back action")
-                                performGlobalAction(GLOBAL_ACTION_BACK)
-                            }
+                            // Handle new shorts content
+                            handleShortsSwipe(shortsInfo)
                         } else {
                             println("First Shorts content detected: ${shortsInfo.title} by ${shortsInfo.account}")
-                            // If we have no back button, we just entered the shorts tab, so we click the back button
-                            if (shortsInfo.backButton == null) {
-                                println("We just entered the shorts tab, clicking back button")
-                                performGlobalAction(GLOBAL_ACTION_BACK)
-                            }
+                            // Handle entering shorts for the first time
+                            handleShortsEntered(shortsInfo)
                         }
                         lastShortWatched = shortsInfo // Update the last watched shorts content
                     }
                 }
             } else if (it.eventType == AccessibilityEvent.WINDOWS_CHANGE_ACTIVE) {
                 println("Active window changed, resetting lastShortWatched")
-                lastShortWatched = null //
+                lastShortWatched = null
             } else {
                 println("Unhandled event type: ${it.eventType} - ${it.className} - ${it.packageName}")
             }
+        }
+    }
+
+    private fun handleShortsEntered(shortsInfo: YouTubeShortsInfo) {
+        // This function is called when we enter shorts from any source
+        println("Entered Shorts: ${shortsInfo.title} by ${shortsInfo.account} - ${sessionManager.isLimitReached()}")
+
+        if (sessionManager.isLimitReached() && (!(settingsManager.limitType == LimitType.SWIPE_COUNT && settingsManager.swipeLimitCount == 0)) || shortsInfo.backButton == null) {
+            // We've reached the limit, so we need to kick the user out of shorts
+            println("Session limit reached, closing shorts immediately")
+            closeShorts(shortsInfo)
+            return
+        }
+        // Start a new session when entering shorts, if there isn't one already
+        sessionManager.startSession()
+
+        if (shortsInfo.backButton == null && settingsManager.blockShortsFeed) {
+            println("We just entered the shorts tab and blocking is enabled, closing the shorts")
+            closeShorts(shortsInfo)
+        } else if (settingsManager.blockingMode == BlockingMode.ALL_SHORTS) {
+            // If we are blocking all shorts, we close the shorts
+            println("Blocking all shorts, closing the shorts")
+            closeShorts(shortsInfo)
+        }
+    }
+
+    private fun handleShortsSwipe(shortsInfo: YouTubeShortsInfo) {
+        // This is called when swiping to new content within shorts
+        println("New Shorts content detected: ${shortsInfo.title} by ${shortsInfo.account}")
+
+        when (settingsManager.blockingMode) {
+            BlockingMode.ALL_SHORTS -> {
+                closeShorts(shortsInfo)
+            }
+
+            BlockingMode.ONLY_SWIPING -> {
+                // Add a swipe and update time - this will check limits and potentially end the session
+                sessionManager.addSwipeAndUpdateTime()
+
+                // Only continue if the session wasn't ended by the limit check above
+                if (sessionManager.isLimitReached()) {
+                    // Handle blocking based on mode
+                    closeShorts(shortsInfo)
+                }
+            }
+        }
+    }
+
+    private fun closeShorts(shortsInfo: YouTubeShortsInfo) {
+        // We never close shorts if the channel is in the allowlist
+        // However, these do count towards limits, so we only perform that check here
+        if (settingsManager.allowlistEnabled &&
+            settingsManager.allowedChannels.any { allowedChannel ->
+                val normalizedAllowed = allowedChannel.removePrefix("@").lowercase()
+                val normalizedAccount = shortsInfo.account.removePrefix("@").lowercase()
+                normalizedAllowed == normalizedAccount
+            }
+        ) {
+            println("Channel ${shortsInfo.account} is in allowlist, allowing shorts")
+            return
+        }
+        var shortsClosed = false
+        if (shortsInfo.backButton != null) {
+            val backButton = shortsInfo.backButton
+            if (backButton.isClickable) {
+                println("Pressing back button to exit shorts")
+                backButton.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                shortsClosed = true
+            }
+            lastBackButtonTime = System.currentTimeMillis()
+        }
+        if (!shortsClosed) {
+            // We couldn't close shorts with the normal back button, so we'll trigger a global back action
+            println("Couldn't close shorts with the back button, triggering global back action")
+            // We only want to perform the global back action if we haven't done it in the last 2 seconds
+            val currentTime = System.currentTimeMillis()
+            if (currentTime - lastBackButtonTime < 1000) {
+                println("Global back action already performed recently, skipping")
+                return
+            }
+            lastBackButtonTime = currentTime
+            println("Performing global back action")
+            performGlobalAction(GLOBAL_ACTION_BACK)
         }
     }
 
@@ -246,9 +369,3 @@ class MyAccessibilityService : AccessibilityService() {
         // Handle service interruption here
     }
 }
-
-data class YouTubeShortsInfo(
-    val title: String,
-    val account: String,
-    val backButton: AccessibilityNodeInfo?
-)

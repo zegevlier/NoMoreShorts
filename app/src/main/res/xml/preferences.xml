@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<PreferenceScreen xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto">
+
+    <!-- Master Control -->
+    <PreferenceCategory
+        android:title="Master Control"
+        android:key="master_control_category">
+
+        <SwitchPreferenceCompat
+            android:key="app_enabled"
+            android:title="Enable YouTube Shorts Blocker"
+            android:summary="Turn on to start blocking YouTube Shorts"
+            android:defaultValue="false"
+            android:persistent="true" />
+
+    </PreferenceCategory>
+
+    <!-- Blocking Configuration -->
+    <PreferenceCategory
+        android:title="Blocking Configuration"
+        android:key="blocking_config_category">
+
+        <SwitchPreferenceCompat
+            android:defaultValue="true"
+            android:dependency="app_enabled"
+            android:key="block_shorts_feed"
+            android:summary="Completely block access to the shorts feed, while still (potentialy, depending on the other settings) allowing entering shorts through recommendations and notifications."
+            android:title="Block Shorts Feed"/>
+
+        <ListPreference
+            android:defaultValue="ALL_SHORTS"
+            android:dependency="app_enabled"
+            android:entries="@array/blocking_mode_entries"
+            android:entryValues="@array/blocking_mode_values"
+            android:key="blocking_mode"
+            android:summary="Choose whether to block shorts completely, or only block swiping through shorts."
+            android:title="Blocking Mode"/>
+
+    </PreferenceCategory>
+
+    <!-- Swipe Limiting -->
+    <PreferenceCategory
+        android:title="Swipe Limiting"
+        android:key="swipe_limiting_category">
+
+        <ListPreference
+            android:defaultValue="SWIPE_COUNT"
+            android:dependency="app_enabled"
+            android:entries="@array/limit_type_entries"
+            android:entryValues="@array/limit_type_values"
+            android:key="limit_type"
+            android:summary="Choose how to limit shorts usage, either by a time limit or a number of swipes."
+            android:title="Limit Type"/>
+
+        <EditTextPreference
+            android:defaultValue="0"
+            android:dependency="app_enabled"
+            android:inputType="number"
+            android:key="swipe_limit_count"
+            android:summary="Maximum number of swipes allowed (0-1000, 0 = no swipes, you are kicked out of shorts as soon as you swipe)"
+            android:title="Swipe Count Limit"/>
+
+        <EditTextPreference
+            android:defaultValue="30"
+            android:dependency="app_enabled"
+            android:inputType="number"
+            android:key="time_limit_minutes"
+            android:summary="Time limit for shorts viewing. Is checked every time you swipe."
+            android:title="Time Limit (minutes)"/>
+
+        <ListPreference
+            android:defaultValue="PER_DAY"
+            android:dependency="app_enabled"
+            android:entries="@array/reset_period_entries"
+            android:entryValues="@array/reset_period_values"
+            android:key="reset_period_type"
+            android:summary="When limits are reset and shorts watching becomes possible again. Session starts when the shorts feed is first entered."
+            android:title="Reset Period"/>
+
+        <EditTextPreference
+            android:defaultValue="60"
+            android:dependency="app_enabled"
+            android:inputType="number"
+            android:key="reset_period_minutes"
+            android:summary="Number of minutes after the sessions [begins / ends] to when the limit resets"
+            android:title="Reset Period (minutes)"/>
+
+    </PreferenceCategory>
+
+    <!-- Scheduling -->
+    <PreferenceCategory
+        android:title="Scheduling"
+        android:key="scheduling_category">
+
+        <SwitchPreferenceCompat
+            android:key="schedule_enabled"
+            android:title="Enable Daily Schedule"
+            android:summary="Block shorts only during specified times"
+            android:defaultValue="false"
+            android:dependency="app_enabled" />
+
+        <Preference
+            android:dependency="schedule_enabled"
+            android:key="schedule_start_time"
+            android:summary="When blocking should start. If start time is after end time, it will block during the night."
+            android:title="Start Time"/>
+
+        <Preference
+            android:key="schedule_end_time"
+            android:title="End Time"
+            android:summary="When blocking should end"
+            android:dependency="schedule_enabled" />
+
+        <MultiSelectListPreference
+            android:key="schedule_days"
+            android:title="Days of Week"
+            android:summary="Select days when blocking is active"
+            android:entries="@array/days_of_week_entries"
+            android:entryValues="@array/days_of_week_values"
+            android:dependency="schedule_enabled" />
+
+    </PreferenceCategory>
+
+    <!-- Channel Allowlist -->
+    <PreferenceCategory
+        android:title="Channel Allowlist"
+        android:key="allowlist_category">
+
+        <SwitchPreferenceCompat
+            android:key="allowlist_enabled"
+            android:title="Enable Channel Allowlist"
+            android:summary="Allow specific channels to bypass blocking"
+            android:defaultValue="false"
+            android:dependency="app_enabled" />
+
+        <Preference
+            android:key="manage_channels"
+            android:title="Manage Channels"
+            android:summary="Add or remove allowed channels"
+            android:dependency="allowlist_enabled" />
+
+    </PreferenceCategory>
+
+</PreferenceScreen>

@@ -19,7 +19,25 @@
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
         </activity>
-        <service android:name=".MyAccessibilityService"
+
+        <activity android:name=".ui.PermissionRequestActivity"
+            android:exported="false"
+            android:theme="@style/Theme.NoMoreShorts" />
+
+        <activity android:name=".ui.PermissionDeniedActivity"
+            android:exported="false"
+            android:theme="@style/Theme.NoMoreShorts" />
+
+        <activity android:name=".ui.ChannelManagementActivity"
+            android:exported="false"
+            android:parentActivityName=".MainActivity"
+            android:theme="@style/Theme.NoMoreShorts">
+            <meta-data
+                android:name="android.support.PARENT_ACTIVITY"
+                android:value=".MainActivity" />
+        </activity>
+
+        <service android:name=".ShortsAccessibilityService"
             android:permission="android.permission.BIND_ACCESSIBILITY_SERVICE"
             android:label="@string/accessibility_service_label"
             android:exported="true">

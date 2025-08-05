@@ -2,4 +2,78 @@
     <string name="app_name">No More Shorts</string>
     <string name="accessibility_service_label">NoMoreShorts</string>
     <string name="accessibility_service_description">Stop scrolling on YouTube shorts</string>
+
+    <!-- Settings strings -->
+    <string name="settings_title">Settings</string>
+    <string name="countdown_title">Disabling App</string>
+    <string name="countdown_message">App will be disabled in %d seconds</string>
+    <string name="countdown_cancel">Cancel</string>
+    <string name="channel_management_title">Manage Channels</string>
+    <string name="add_channel">Add Channel</string>
+    <string name="channel_name_hint">Enter channel name</string>
+    <string name="channel_name_empty">Channel name cannot be empty</string>
+    <string name="channel_instructions">Add YouTube channel names to allow them to bypass blocking. Enter the exact channel name as it appears on the short at the bottom of the screen. Short views and swipes are still tracked and counted for allowlisted channels, but while you are watching allowlisted channels you will not be kicked out of shorts.</string>
+
+    <!-- Permission flow strings -->
+    <string name="permission_title">Accessibility Permission Required</string>
+    <string name="permission_description">No More Shorts needs special accessibility permissions to help you control your YouTube Shorts usage.\n\n• We monitor your screen to detect when you\'re watching YouTube Shorts\n• We automatically close Shorts when you\'ve reached your set limits\n• We can press the back button for you to exit Shorts\n\nYour privacy is protected:\n• No data leaves your device\n• We only look at YouTube\'s interface, not your personal content\n• Only your app settings are saved on your device\n\nHow to enable:\n1. Click the button below to open accessibility settings\n2. Navigate to \"Downloaded apps\" or \"Installed apps\"\n3. Find and tap \"NoMoreShorts\"\n4. Toggle the switch to enable it\n\nWithout these permissions, the app cannot function.</string>
+    <string name="grant_permission">Open Accessibility Settings</string>
+
+    <string name="permission_denied_title">Permission Required</string>
+    <string name="permission_denied_description">No More Shorts cannot function without accessibility permissions. These permissions allow us to detect YouTube Shorts and help you stick to your usage limits.\n\nPlease grant the permission to continue using the app.</string>
+    <string name="try_again">Grant Permission</string>
+
+    <!-- Blocking mode options -->
+    <string-array name="blocking_mode_entries">
+        <item>Only Swiping</item>
+        <item>All Shorts</item>
+    </string-array>
+
+    <string-array name="blocking_mode_values">
+        <item>ONLY_SWIPING</item>
+        <item>ALL_SHORTS</item>
+    </string-array>
+
+    <!-- Limit type options -->
+    <string-array name="limit_type_entries">
+        <item>Swipe Count</item>
+        <item>Time Limit</item>
+    </string-array>
+
+    <string-array name="limit_type_values">
+        <item>SWIPE_COUNT</item>
+        <item>TIME_LIMIT</item>
+    </string-array>
+
+    <!-- Reset period options -->
+    <string-array name="reset_period_entries">
+        <item>Timeout after session ended</item>
+        <item>Per day</item>
+    </string-array>
+
+    <string-array name="reset_period_values">
+        <item>AFTER_SESSION_END</item>
+        <item>PER_DAY</item>
+    </string-array>
+
+    <!-- Days of week options -->
+    <string-array name="days_of_week_entries">
+        <item>Monday</item>
+        <item>Tuesday</item>
+        <item>Wednesday</item>
+        <item>Thursday</item>
+        <item>Friday</item>
+        <item>Saturday</item>
+        <item>Sunday</item>
+    </string-array>
+
+    <string-array name="days_of_week_values">
+        <item>monday</item>
+        <item>tuesday</item>
+        <item>wednesday</item>
+        <item>thursday</item>
+        <item>friday</item>
+        <item>saturday</item>
+        <item>sunday</item>
+    </string-array>
 </resources>
