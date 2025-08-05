@@ -24,10 +24,6 @@
             android:exported="false"
             android:theme="@style/Theme.NoMoreShorts" />
 
-        <activity android:name=".ui.PermissionDeniedActivity"
-            android:exported="false"
-            android:theme="@style/Theme.NoMoreShorts" />
-
         <activity android:name=".ui.ChannelManagementActivity"
             android:exported="false"
             android:parentActivityName=".MainActivity"

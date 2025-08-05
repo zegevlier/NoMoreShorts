@@ -30,7 +30,7 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
         sessionManager.onLimitReached = {
             // Force close any current shorts and show detailed limit message
             lastShortWatched?.let {
-                val detailedMessage = sessionManager.getLimitReachedMessage()
+                val detailedMessage = sessionManager.getLimitReachedMessage(this@ShortsAccessibilityService)
                 closeShorts(it, detailedMessage)
             }
         }
@@ -74,28 +74,33 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
         }
 
         event?.let {
-            if (it.eventType == AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED) {
-                val rootNode = rootInActiveWindow
-                rootNode?.let { node ->
-                    val shortsInfo = extractShortsInfo(node)
-                    if (shortsInfo != null) {
-                        if (lastShortWatched == shortsInfo) {
-                            return // Skip if the content is the same as the last watched
-                        }
-                        if (lastShortWatched != null) {
-                            // Handle new shorts content
-                            lastShortWatched = shortsInfo // Update the last watched shorts content
-                            handleShortsSwipe(shortsInfo)
-                        } else {
-                            lastShortWatched = shortsInfo // Update the last watched shorts content
-                            // Handle entering shorts for the first time
-                            handleShortsEntered(shortsInfo)
+            when (it.eventType) {
+                AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
+                    val rootNode = rootInActiveWindow
+                    rootNode?.let { node ->
+                        val shortsInfo = extractShortsInfo(node)
+                        if (shortsInfo != null) {
+                            if (lastShortWatched == shortsInfo) {
+                                return // Skip if the content is the same as the last watched
+                            }
+                            if (lastShortWatched != null) {
+                                // Handle new shorts content
+                                lastShortWatched = shortsInfo // Update the last watched shorts content
+                                handleShortsSwipe(shortsInfo)
+                            } else {
+                                lastShortWatched = shortsInfo // Update the last watched shorts content
+                                // Handle entering shorts for the first time
+                                handleShortsEntered(shortsInfo)
+                            }
                         }
                     }
                 }
-            } else if (it.eventType == AccessibilityEvent.WINDOWS_CHANGE_ACTIVE) {
-                lastShortWatched = null
-            } else {
+                AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
+                    // This event is triggered when the active window changes
+                    // We can reset the last watched shorts content here
+                    lastShortWatched = null
+                }
+                else -> {}
             }
         }
     }
@@ -106,14 +111,14 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
         sessionManager.startSession()
 
         if (shortsInfo.backButton == null && settingsManager.blockShortsFeed) {
-            closeShorts(shortsInfo, "Shorts feed is blocked")
+            closeShorts(shortsInfo, getString(R.string.shorts_feed_blocked))
         } else if (settingsManager.blockingMode == BlockingMode.ALL_SHORTS) {
             // If we are blocking all shorts, we close the shorts
-            closeShorts(shortsInfo, "All Shorts are blocked")
+            closeShorts(shortsInfo, getString(R.string.all_shorts_blocked))
         } else if (settingsManager.blockingMode == BlockingMode.ONLY_SWIPING &&
             settingsManager.limitType == LimitType.SWIPE_COUNT && settingsManager.swipeLimitCount == 0
             && shortsInfo.backButton == null) {
-            closeShorts(shortsInfo, "No shorts feed when swipe limit is 0")
+            closeShorts(shortsInfo, getString(R.string.no_shorts_feed_zero_swipe))
         }
     }
 
@@ -121,7 +126,7 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
         // This is called when swiping to new content within shorts
         when (settingsManager.blockingMode) {
             BlockingMode.ALL_SHORTS -> {
-                closeShorts(shortsInfo, "All Shorts are blocked")
+                closeShorts(shortsInfo, getString(R.string.all_shorts_blocked))
             }
 
             BlockingMode.ONLY_SWIPING -> {
@@ -132,7 +137,7 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
         }
     }
 
-    private fun closeShorts(shortsInfo: YouTubeShortsInfo, reason: String = "Shorts blocked") {
+    private fun closeShorts(shortsInfo: YouTubeShortsInfo, reason: String = getString(R.string.shorts_blocked)) {
         // We never close shorts if the channel is in the allowlist
         // However, these do count towards limits, so we only perform that check here
         if (settingsManager.allowlistEnabled &&
@@ -172,7 +177,7 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
     private fun showToast(message: String) {
         try {
             Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
-        } catch (e: Exception) {
+        } catch (_: Exception) {
         }
     }
 
@@ -187,7 +192,7 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
         return try {
             extractShortsInfoFromStructure(rootNode)
         } catch (e: Exception) {
-            debugPrintTreeStructure("Error in tree structure", rootNode)
+            // Log error without debug tree structure in production
             e.printStackTrace()
             null
         }
@@ -328,22 +333,6 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
             }
         }
         return null
-    }
-
-    private fun debugPrintTreeStructure(message: String, node: AccessibilityNodeInfo) {
-        val content = StringBuilder()
-        content.append("$message:\n")
-        getEntireTreeStructure(node, content)
-        println("Tree Structure:\n$content")
-    }
-
-    private fun getEntireTreeStructure(node: AccessibilityNodeInfo, content: StringBuilder, depth: Int = 0) {
-        content.append(" ".repeat(depth) + "${node.className} /$/ ${node.text} /$/ ${node.tooltipText}\n")
-        for (i in 0 until node.childCount) {
-            node.getChild(i)?.let { childNode ->
-                getEntireTreeStructure(childNode, content, depth + 1)
-            }
-        }
     }
 
     // Helper function to recursively extract text from nodes

@@ -1,7 +1,9 @@
 package me.zegs.nomoreshorts.session
 
+import android.content.Context
 import android.os.Handler
 import android.os.Looper
+import me.zegs.nomoreshorts.R
 import me.zegs.nomoreshorts.models.ResetPeriodType
 import me.zegs.nomoreshorts.settings.SettingsManager
 
@@ -21,13 +23,11 @@ class SessionManager(private val settingsManager: SettingsManager) {
             sessionStartTime = System.currentTimeMillis()
             sessionSwipeCount = 0
             scheduleReset()
-        } else {
         }
     }
 
     fun addSwipeAndUpdateTime() {
         sessionSwipeCount++
-        val currentSessionTime = getCurrentTimeSpent()
 
         if (settingsManager.resetPeriodType == ResetPeriodType.AFTER_SESSION_END) {
             // Re-schedule reset after each swipe
@@ -103,19 +103,19 @@ class SessionManager(private val settingsManager: SettingsManager) {
         }
     }
 
-    fun getLimitReachedMessage(): String {
+    fun getLimitReachedMessage(context: Context): String {
         return when (settingsManager.limitType) {
             me.zegs.nomoreshorts.models.LimitType.SWIPE_COUNT -> {
                 if (settingsManager.swipeLimitCount == 0) {
-                    "Swiping is disabled"
+                    context.getString(R.string.swiping_disabled)
                 } else {
-                    "Swipe limit reached ($sessionSwipeCount/${settingsManager.swipeLimitCount} swipes)"
+                    context.getString(R.string.swipe_limit_reached, sessionSwipeCount, settingsManager.swipeLimitCount)
                 }
             }
 
             me.zegs.nomoreshorts.models.LimitType.TIME_LIMIT -> {
                 val timeSpentMinutes = (getCurrentTimeSpent() / 60000).toInt()
-                "Time limit reached ($timeSpentMinutes/${settingsManager.timeLimitMinutes} minutes)"
+                context.getString(R.string.time_limit_reached, timeSpentMinutes, settingsManager.timeLimitMinutes)
             }
         }
     }

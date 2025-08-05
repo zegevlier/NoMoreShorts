@@ -17,7 +17,7 @@ import me.zegs.nomoreshorts.models.BlockingMode
 import me.zegs.nomoreshorts.models.LimitType
 import me.zegs.nomoreshorts.models.PreferenceKeys
 import me.zegs.nomoreshorts.ui.ChannelManagementActivity
-import java.util.*
+import java.util.Locale
 
 class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedPreferenceChangeListener {
 
@@ -47,8 +47,8 @@ class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedP
 
     private fun setupPreferences() {
         // Setup time picker preferences
-        setupTimePicker(PreferenceKeys.SCHEDULE_START_TIME, "Start Time")
-        setupTimePicker(PreferenceKeys.SCHEDULE_END_TIME, "End Time")
+        setupTimePicker(PreferenceKeys.SCHEDULE_START_TIME)
+        setupTimePicker(PreferenceKeys.SCHEDULE_END_TIME)
 
         // Setup channel management
         findPreference<Preference>("manage_channels")?.setOnPreferenceClickListener {
@@ -64,7 +64,7 @@ class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedP
         setupNumericValidation()
     }
 
-    private fun setupTimePicker(key: String, title: String) {
+    private fun setupTimePicker(key: String) {
         findPreference<Preference>(key)?.setOnPreferenceClickListener { preference ->
             val currentTime = settingsManager?.let {
                 if (key == PreferenceKeys.SCHEDULE_START_TIME) it.scheduleStartTime else it.scheduleEndTime
@@ -75,7 +75,7 @@ class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedP
             val minute = timeParts[1].toIntOrNull() ?: 0
 
             TimePickerDialog(requireContext(), { _, selectedHour, selectedMinute ->
-                val timeString = String.format("%02d:%02d", selectedHour, selectedMinute)
+                val timeString = String.format(Locale.US, "%02d:%02d", selectedHour, selectedMinute)
                 settingsManager?.let {
                     if (key == PreferenceKeys.SCHEDULE_START_TIME) {
                         it.scheduleStartTime = timeString
@@ -112,7 +112,7 @@ class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedP
         findPreference<EditTextPreference>(PreferenceKeys.SWIPE_LIMIT_COUNT)?.setOnPreferenceChangeListener { _, newValue ->
             val count = newValue.toString().toIntOrNull()
             if (count == null || count < 0 || count > 1000) {
-                Toast.makeText(requireContext(), "Swipe limit must be between 0 and 1000", Toast.LENGTH_SHORT).show()
+                Toast.makeText(requireContext(), getString(R.string.swipe_limit_validation), Toast.LENGTH_SHORT).show()
                 false
             } else {
                 true
@@ -123,7 +123,7 @@ class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedP
         findPreference<EditTextPreference>(PreferenceKeys.TIME_LIMIT_MINUTES)?.setOnPreferenceChangeListener { _, newValue ->
             val minutes = newValue.toString().toIntOrNull()
             if (minutes == null || minutes < 1) {
-                Toast.makeText(requireContext(), "Time limit must be at least 1 minute", Toast.LENGTH_SHORT).show()
+                Toast.makeText(requireContext(), getString(R.string.time_limit_validation), Toast.LENGTH_SHORT).show()
                 false
             } else {
                 true
@@ -134,7 +134,7 @@ class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedP
         findPreference<EditTextPreference>(PreferenceKeys.RESET_PERIOD_MINUTES)?.setOnPreferenceChangeListener { _, newValue ->
             val minutes = newValue.toString().toIntOrNull()
             if (minutes == null || minutes < 1) {
-                Toast.makeText(requireContext(), "Reset period must be at least 1 minute", Toast.LENGTH_SHORT).show()
+                Toast.makeText(requireContext(), getString(R.string.reset_period_validation), Toast.LENGTH_SHORT).show()
                 false
             } else {
                 true
@@ -170,8 +170,6 @@ class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedP
         val isAppEnabled = settingsManager?.isAppEnabled ?: false
         val isOnlySwipingMode = settingsManager?.blockingMode == BlockingMode.ONLY_SWIPING
         val limitType = settingsManager?.limitType ?: LimitType.SWIPE_COUNT
-        val isScheduleEnabled = settingsManager?.scheduleEnabled ?: false
-        val isAllowlistEnabled = settingsManager?.allowlistEnabled ?: false
 
         // Show/hide swipe limiting section based on blocking mode
         val swipeLimitingCategory = findPreference<Preference>("swipe_limiting_category")
@@ -204,7 +202,7 @@ class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedP
         // Create the dialog first
         countdownDialog = AlertDialog.Builder(requireContext())
             .setTitle(getString(R.string.countdown_title))
-            .setMessage(getString(R.string.countdown_message, remainingSeconds))
+            .setMessage(resources.getQuantityString(R.plurals.countdown_message, remainingSeconds, remainingSeconds))
             .setCancelable(false)
             .setNegativeButton(getString(R.string.countdown_cancel)) { _, _ ->
                 cancelCountdown()
@@ -219,14 +217,14 @@ class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedP
         countdownTimer = object : CountDownTimer((countdownSeconds * 1000).toLong(), 1000) {
             override fun onTick(millisUntilFinished: Long) {
                 remainingSeconds = (millisUntilFinished / 1000).toInt() + 1
-                countdownDialog?.setMessage(getString(R.string.countdown_message, remainingSeconds))
+                countdownDialog?.setMessage(resources.getQuantityString(R.plurals.countdown_message, remainingSeconds, remainingSeconds))
             }
 
             override fun onFinish() {
                 countdownDialog?.dismiss()
                 countdownDialog = null
                 // App will remain disabled as set by the preference change
-                Toast.makeText(requireContext(), "YouTube Shorts Blocker disabled", Toast.LENGTH_SHORT).show()
+                Toast.makeText(requireContext(), getString(R.string.youtube_shorts_blocker_disabled), Toast.LENGTH_SHORT).show()
             }
         }
         countdownTimer?.start()

@@ -9,6 +9,7 @@ import me.zegs.nomoreshorts.models.BlockingMode
 import me.zegs.nomoreshorts.models.LimitType
 import me.zegs.nomoreshorts.models.PreferenceKeys
 import me.zegs.nomoreshorts.models.ResetPeriodType
+import androidx.core.content.edit
 
 class SettingsManager(context: Context) {
     private val prefs: SharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
@@ -17,23 +18,23 @@ class SettingsManager(context: Context) {
     // Master Control
     var isAppEnabled: Boolean
         get() = prefs.getBoolean(PreferenceKeys.APP_ENABLED, false)
-        set(value) = prefs.edit().putBoolean(PreferenceKeys.APP_ENABLED, value).apply()
+        set(value) = prefs.edit { putBoolean(PreferenceKeys.APP_ENABLED, value) }
 
     // Blocking Configuration
     var blockShortsFeed: Boolean
         get() = prefs.getBoolean(PreferenceKeys.BLOCK_FEED, true)
-        set(value) = prefs.edit().putBoolean(PreferenceKeys.BLOCK_FEED, value).apply()
+        set(value) = prefs.edit { putBoolean(PreferenceKeys.BLOCK_FEED, value)}
 
     var blockingMode: BlockingMode
         get() {
             val mode = prefs.getString(PreferenceKeys.BLOCKING_MODE, BlockingMode.ALL_SHORTS.name)
             return try {
                 BlockingMode.valueOf(mode ?: BlockingMode.ALL_SHORTS.name)
-            } catch (e: IllegalArgumentException) {
+            } catch (_: IllegalArgumentException) {
                 BlockingMode.ALL_SHORTS
             }
         }
-        set(value) = prefs.edit().putString(PreferenceKeys.BLOCKING_MODE, value.name).apply()
+        set(value) = prefs.edit { putString(PreferenceKeys.BLOCKING_MODE, value.name)}
 
     // Limit Configuration
     var limitType: LimitType
@@ -41,11 +42,11 @@ class SettingsManager(context: Context) {
             val type = prefs.getString(PreferenceKeys.LIMIT_TYPE, LimitType.SWIPE_COUNT.name)
             return try {
                 LimitType.valueOf(type ?: LimitType.SWIPE_COUNT.name)
-            } catch (e: IllegalArgumentException) {
+            } catch (_: IllegalArgumentException) {
                 LimitType.SWIPE_COUNT
             }
         }
-        set(value) = prefs.edit().putString(PreferenceKeys.LIMIT_TYPE, value.name).apply()
+        set(value) = prefs.edit { putString(PreferenceKeys.LIMIT_TYPE, value.name)}
 
     // Swipe Limiting
     var swipeLimitCount: Int
@@ -54,7 +55,7 @@ class SettingsManager(context: Context) {
             return stringValue.toIntOrNull()?.coerceIn(0, 1000) ?: 0
         }
         set(value) {
-            prefs.edit().putString(PreferenceKeys.SWIPE_LIMIT_COUNT, value.coerceIn(0, 1000).toString()).apply()
+            prefs.edit { putString(PreferenceKeys.SWIPE_LIMIT_COUNT, value.coerceIn(0, 1000).toString()) }
         }
 
     var timeLimitMinutes: Int
@@ -63,7 +64,7 @@ class SettingsManager(context: Context) {
             return stringValue.toIntOrNull()?.coerceAtLeast(1) ?: 30
         }
         set(value) {
-            prefs.edit().putString(PreferenceKeys.TIME_LIMIT_MINUTES, value.coerceAtLeast(1).toString()).apply()
+            prefs.edit { putString(PreferenceKeys.TIME_LIMIT_MINUTES, value.coerceAtLeast(1).toString()) }
         }
 
     var resetPeriodType: ResetPeriodType
@@ -71,11 +72,11 @@ class SettingsManager(context: Context) {
             val type = prefs.getString(PreferenceKeys.RESET_PERIOD_TYPE, ResetPeriodType.PER_DAY.name)
             return try {
                 ResetPeriodType.valueOf(type ?: ResetPeriodType.PER_DAY.name)
-            } catch (e: IllegalArgumentException) {
+            } catch (_: IllegalArgumentException) {
                 ResetPeriodType.PER_DAY
             }
         }
-        set(value) = prefs.edit().putString(PreferenceKeys.RESET_PERIOD_TYPE, value.name).apply()
+        set(value) = prefs.edit {putString(PreferenceKeys.RESET_PERIOD_TYPE, value.name) }
 
     var resetPeriodMinutes: Int
         get() {
@@ -83,21 +84,21 @@ class SettingsManager(context: Context) {
             return stringValue.toIntOrNull()?.coerceAtLeast(1) ?: 60
         }
         set(value) {
-            prefs.edit().putString(PreferenceKeys.RESET_PERIOD_MINUTES, value.coerceAtLeast(1).toString()).apply()
+            prefs.edit {putString(PreferenceKeys.RESET_PERIOD_MINUTES, value.coerceAtLeast(1).toString()) }
         }
 
     // Scheduling
     var scheduleEnabled: Boolean
         get() = prefs.getBoolean(PreferenceKeys.SCHEDULE_ENABLED, false)
-        set(value) = prefs.edit().putBoolean(PreferenceKeys.SCHEDULE_ENABLED, value).apply()
+        set(value) = prefs.edit {putBoolean(PreferenceKeys.SCHEDULE_ENABLED, value) }
 
     var scheduleStartTime: String
         get() = prefs.getString(PreferenceKeys.SCHEDULE_START_TIME, "09:00") ?: "09:00"
-        set(value) = prefs.edit().putString(PreferenceKeys.SCHEDULE_START_TIME, value).apply()
+        set(value) = prefs.edit {putString(PreferenceKeys.SCHEDULE_START_TIME, value) }
 
     var scheduleEndTime: String
         get() = prefs.getString(PreferenceKeys.SCHEDULE_END_TIME, "22:00") ?: "22:00"
-        set(value) = prefs.edit().putString(PreferenceKeys.SCHEDULE_END_TIME, value).apply()
+        set(value) = prefs.edit {putString(PreferenceKeys.SCHEDULE_END_TIME, value) }
 
     var scheduleDays: Set<String>
         get() {
@@ -107,7 +108,7 @@ class SettingsManager(context: Context) {
                 if (directSet != null) {
                     return directSet
                 }
-            } catch (e: Exception) {
+            } catch (_: Exception) {
                 // If that fails, try to get it as a JSON string
             }
 
@@ -117,7 +118,7 @@ class SettingsManager(context: Context) {
                 try {
                     val type = object : TypeToken<Set<String>>() {}.type
                     gson.fromJson(daysJson, type)
-                } catch (e: Exception) {
+                } catch (_: Exception) {
                     getDefaultDays()
                 }
             } else {
@@ -126,13 +127,13 @@ class SettingsManager(context: Context) {
         }
         set(value) {
             // Store as StringSet for MultiSelectListPreference compatibility
-            prefs.edit().putStringSet(PreferenceKeys.SCHEDULE_DAYS, value.toSet()).apply()
+            prefs.edit {putStringSet(PreferenceKeys.SCHEDULE_DAYS, value.toSet()) }
         }
 
     // Channel Allowlist
     var allowlistEnabled: Boolean
         get() = prefs.getBoolean(PreferenceKeys.ALLOWLIST_ENABLED, false)
-        set(value) = prefs.edit().putBoolean(PreferenceKeys.ALLOWLIST_ENABLED, value).apply()
+        set(value) = prefs.edit {putBoolean(PreferenceKeys.ALLOWLIST_ENABLED, value) }
 
     var allowedChannels: List<String>
         get() {
@@ -150,7 +151,7 @@ class SettingsManager(context: Context) {
         }
         set(value) {
             val channelsJson = gson.toJson(value)
-            prefs.edit().putString(PreferenceKeys.ALLOWED_CHANNELS, channelsJson).apply()
+            prefs.edit {putString(PreferenceKeys.ALLOWED_CHANNELS, channelsJson) }
         }
 
     private fun getDefaultDays(): Set<String> {

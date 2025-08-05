@@ -30,7 +30,7 @@ object AccessibilityUtils {
 
             return isEnabled
 
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             false
         }
     }

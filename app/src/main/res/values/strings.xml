@@ -6,7 +6,10 @@
     <!-- Settings strings -->
     <string name="settings_title">Settings</string>
     <string name="countdown_title">Disabling App</string>
-    <string name="countdown_message">App will be disabled in %d seconds</string>
+    <plurals name="countdown_message">
+        <item quantity="one">App will be disabled in %d second</item>
+        <item quantity="other">App will be disabled in %d seconds</item>
+    </plurals>
     <string name="countdown_cancel">Cancel</string>
     <string name="channel_management_title">Manage Channels</string>
     <string name="add_channel">Add Channel</string>
@@ -16,12 +19,13 @@
 
     <!-- Permission flow strings -->
     <string name="permission_title">Accessibility Permission Required</string>
-    <string name="permission_description">No More Shorts needs special accessibility permissions to help you control your YouTube Shorts usage.\n\n• We monitor your screen to detect when you\'re watching YouTube Shorts\n• We automatically close Shorts when you\'ve reached your set limits\n• We can press the back button for you to exit Shorts\n\nYour privacy is protected:\n• No data leaves your device\n• We only look at YouTube\'s interface, not your personal content\n• Only your app settings are saved on your device\n\nHow to enable:\n1. Click the button below to open accessibility settings\n2. Navigate to \"Downloaded apps\" or \"Installed apps\"\n3. Find and tap \"NoMoreShorts\"\n4. Toggle the switch to enable it\n\nWithout these permissions, the app cannot function.</string>
+    <string name="permission_description">No More Shorts needs special accessibility permissions to help you control your YouTube Shorts usage.\n\n• We monitor your screen to detect when you\'re watching YouTube Shorts\n• We automatically close Shorts when you\'ve reached your set limits\n• We can press the back button for you to exit Shorts\n\nYour privacy is protected:\n• No data leaves your device\n• We only look at YouTube\'s interface, not your personal content\n• Only your app settings are saved on your device\n\nHow to enable:\n1. Click the button below to open accessibility settings\n2. Navigate to "Downloaded apps" or "Installed apps"\n3. Find and tap "NoMoreShorts"\n4. Toggle the switch to enable it\n\nWithout these permissions, the app cannot function.</string>
     <string name="grant_permission">Open Accessibility Settings</string>
 
     <string name="permission_denied_title">Permission Required</string>
     <string name="permission_denied_description">No More Shorts cannot function without accessibility permissions. These permissions allow us to detect YouTube Shorts and help you stick to your usage limits.\n\nPlease grant the permission to continue using the app.</string>
     <string name="try_again">Grant Permission</string>
+    <string name="app_icon_label">App Icon</string>
 
     <!-- Blocking mode options -->
     <string-array name="blocking_mode_entries">
@@ -76,4 +80,31 @@
         <item>saturday</item>
         <item>sunday</item>
     </string-array>
+
+    <!-- Validation messages -->
+    <string name="swipe_limit_validation">Swipe limit must be between 0 and 1000</string>
+    <string name="time_limit_validation">Time limit must be at least 1 minute</string>
+    <string name="reset_period_validation">Reset period must be at least 1 minute</string>
+
+    <!-- Channel management messages -->
+    <string name="channel_already_exists">Channel already in allowlist</string>
+    <string name="channel_added">Channel added to allowlist</string>
+    <string name="channel_removed">Channel removed from allowlist</string>
+
+    <!-- Accessibility service messages -->
+    <string name="youtube_shorts_blocker_disabled">YouTube Shorts Blocker disabled</string>
+    <string name="shorts_feed_blocked">Shorts feed is blocked</string>
+    <string name="all_shorts_blocked">All Shorts are blocked</string>
+    <string name="no_shorts_feed_zero_swipe">No shorts feed when swipe limit is 0</string>
+    <string name="shorts_blocked">Shorts blocked</string>
+
+    <!-- Session limit messages -->
+    <string name="swiping_disabled">Swiping is disabled</string>
+    <string name="swipe_limit_reached">Swipe limit reached (%1$d/%2$d swipes)</string>
+    <string name="time_limit_reached">Time limit reached (%1$d/%2$d minutes)</string>
+
+    <!-- Preference keys for manage_channels (if needed in code) -->
+    <string name="manage_channels_key">manage_channels</string>
+    <string name="swipe_limiting_category_key">swipe_limiting_category</string>
+
 </resources>

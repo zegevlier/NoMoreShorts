@@ -63,7 +63,7 @@ class PermissionRequestActivity : AppCompatActivity() {
             val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
             intent.flags = Intent.FLAG_ACTIVITY_NEW_TASK
             startActivity(intent)
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             // Fallback to general accessibility settings
             val intent = Intent(Settings.ACTION_ACCESSIBILITY_SETTINGS)
             startActivity(intent)

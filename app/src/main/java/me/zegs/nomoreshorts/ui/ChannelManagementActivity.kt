@@ -70,7 +70,7 @@ class ChannelManagementActivity : AppCompatActivity() {
         val currentChannels = settingsManager.allowedChannels.toMutableList()
 
         if (currentChannels.contains(channelName)) {
-            Toast.makeText(this, "Channel already in allowlist", Toast.LENGTH_SHORT).show()
+            Toast.makeText(this, getString(R.string.channel_already_exists), Toast.LENGTH_SHORT).show()
             return
         }
 
@@ -80,7 +80,7 @@ class ChannelManagementActivity : AppCompatActivity() {
         channelAdapter.addChannel(channelName)
         editTextChannel.text.clear()
 
-        Toast.makeText(this, "Channel added to allowlist", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, getString(R.string.channel_added), Toast.LENGTH_SHORT).show()
     }
 
     private fun removeChannel(channel: String) {
@@ -90,7 +90,7 @@ class ChannelManagementActivity : AppCompatActivity() {
 
         channelAdapter.removeChannel(channel)
 
-        Toast.makeText(this, "Channel removed from allowlist", Toast.LENGTH_SHORT).show()
+        Toast.makeText(this, getString(R.string.channel_removed), Toast.LENGTH_SHORT).show()
     }
 
     override fun onSupportNavigateUp(): Boolean {
