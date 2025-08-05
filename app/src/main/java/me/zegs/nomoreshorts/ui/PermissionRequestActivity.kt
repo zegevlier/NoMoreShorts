@@ -5,9 +5,10 @@ import android.os.Bundle
 import android.provider.Settings
 import android.widget.Button
 import android.widget.TextView
+import androidx.activity.OnBackPressedCallback
 import androidx.appcompat.app.AppCompatActivity
 import me.zegs.nomoreshorts.R
-import me.zegs.nomoreshorts.ShortsAccessibilityService
+import me.zegs.nomoreshorts.utils.AccessibilityUtils
 
 class PermissionRequestActivity : AppCompatActivity() {
 
@@ -16,6 +17,7 @@ class PermissionRequestActivity : AppCompatActivity() {
         setContentView(R.layout.activity_permission_request)
 
         setupViews()
+        setupBackPressedHandler()
     }
 
     private fun setupViews() {
@@ -34,9 +36,20 @@ class PermissionRequestActivity : AppCompatActivity() {
         supportActionBar?.title = getString(R.string.permission_title)
     }
 
+    private fun setupBackPressedHandler() {
+        // Handle back button press with modern API
+        onBackPressedDispatcher.addCallback(this, object : OnBackPressedCallback(true) {
+            override fun handleOnBackPressed() {
+                // User pressed back - just stay on this screen since we need the permission
+                // They can use the system back button to exit the app if they want
+                // Do nothing to prevent going back
+            }
+        })
+    }
+
     private fun openAccessibilitySettings() {
         // First check if we already have permission
-        if (isAccessibilityServiceEnabled()) {
+        if (AccessibilityUtils.isAccessibilityServiceEnabled(this)) {
             // Already have permission, go to main settings
             val intent = Intent(this, me.zegs.nomoreshorts.MainActivity::class.java)
             intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
@@ -60,48 +73,12 @@ class PermissionRequestActivity : AppCompatActivity() {
     override fun onResume() {
         super.onResume()
         // Check if permission was granted when user returns
-        if (isAccessibilityServiceEnabled()) {
+        if (AccessibilityUtils.isAccessibilityServiceEnabled(this)) {
             // Permission granted, go to main activity which will show settings
             val intent = Intent(this, me.zegs.nomoreshorts.MainActivity::class.java)
             intent.flags = Intent.FLAG_ACTIVITY_CLEAR_TOP or Intent.FLAG_ACTIVITY_NEW_TASK
             startActivity(intent)
             finish()
-        }
-    }
-
-    override fun onBackPressed() {
-        super.onBackPressed()
-        // User pressed back - just stay on this screen since we need the permission
-        // They can use the system back button to exit the app if they want
-    }
-
-    private fun isAccessibilityServiceEnabled(): Boolean {
-        return try {
-            val services = Settings.Secure.getString(
-                contentResolver,
-                Settings.Secure.ENABLED_ACCESSIBILITY_SERVICES
-            )
-
-            println("Enabled accessibility services: '$services'")
-            println("Looking for package: $packageName")
-
-            // Handle case where services might be null or empty
-            if (services.isNullOrEmpty()) {
-                println("No accessibility services enabled")
-                return false
-            }
-
-            // Check if our service is in the list - be more flexible with the matching
-            val isEnabled = services.contains(packageName) &&
-                    (services.contains("ShortsAccessibilityService") ||
-                            services.contains("MyAccessibilityService"))
-
-            println("Service enabled: $isEnabled")
-            return isEnabled
-
-        } catch (e: Exception) {
-            println("Error checking accessibility service: ${e.message}")
-            false
         }
     }
 }

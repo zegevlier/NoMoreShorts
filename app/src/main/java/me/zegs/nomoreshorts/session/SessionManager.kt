@@ -17,21 +17,17 @@ class SessionManager(private val settingsManager: SettingsManager) {
     var onLimitReached: (() -> Unit)? = null
 
     fun startSession() {
-        println("Starting new session if there is no active session")
         if (sessionStartTime == 0L) {
             sessionStartTime = System.currentTimeMillis()
             sessionSwipeCount = 0
             scheduleReset()
-            println("Session started at ${sessionStartTime}")
         } else {
-            println("Session already active, not starting a new one")
         }
     }
 
     fun addSwipeAndUpdateTime() {
         sessionSwipeCount++
         val currentSessionTime = getCurrentTimeSpent()
-        println("Swipe count: $sessionSwipeCount, Time spent: ${currentSessionTime / 1000} seconds")
 
         if (settingsManager.resetPeriodType == ResetPeriodType.AFTER_SESSION_END) {
             // Re-schedule reset after each swipe
@@ -40,7 +36,7 @@ class SessionManager(private val settingsManager: SettingsManager) {
         }
         // Check if limit is reached (this ends the session)
         if (isLimitReached()) {
-            println("Session limit reached!")
+            onLimitReached?.invoke()
         }
     }
 
@@ -51,14 +47,11 @@ class SessionManager(private val settingsManager: SettingsManager) {
         val delayMillis = customDelayMillis ?: settingsManager.getSessionTimeoutMillis()
 
         if (delayMillis <= 0) {
-            println("Invalid delay for reset scheduling: $delayMillis")
             return
         }
 
-        println("Scheduling session reset in ${delayMillis / 1000} seconds")
 
         currentResetTask = Runnable {
-            println("Session reset triggered")
             resetSession()
             onSessionReset?.invoke()
 
@@ -75,20 +68,17 @@ class SessionManager(private val settingsManager: SettingsManager) {
         currentResetTask?.let { task ->
             handler.removeCallbacks(task)
             currentResetTask = null
-            println("Cancelled scheduled session reset")
         }
     }
 
     fun updateResetSchedule() {
         // Called when settings change - reschedule with new timing
         if (currentResetTask != null) {
-            println("Updating reset schedule due to settings change")
             scheduleReset()
         }
     }
 
     private fun resetSession() {
-        println("Resetting session counters")
         sessionSwipeCount = 0
         sessionStartTime = 0L
     }
@@ -106,8 +96,26 @@ class SessionManager(private val settingsManager: SettingsManager) {
             me.zegs.nomoreshorts.models.LimitType.SWIPE_COUNT -> {
                 sessionSwipeCount >= settingsManager.swipeLimitCount
             }
+
             me.zegs.nomoreshorts.models.LimitType.TIME_LIMIT -> {
                 getCurrentTimeSpent() >= settingsManager.timeLimitMinutes * 60 * 1000L
+            }
+        }
+    }
+
+    fun getLimitReachedMessage(): String {
+        return when (settingsManager.limitType) {
+            me.zegs.nomoreshorts.models.LimitType.SWIPE_COUNT -> {
+                if (settingsManager.swipeLimitCount == 0) {
+                    "Swiping is disabled"
+                } else {
+                    "Swipe limit reached ($sessionSwipeCount/${settingsManager.swipeLimitCount} swipes)"
+                }
+            }
+
+            me.zegs.nomoreshorts.models.LimitType.TIME_LIMIT -> {
+                val timeSpentMinutes = (getCurrentTimeSpent() / 60000).toInt()
+                "Time limit reached ($timeSpentMinutes/${settingsManager.timeLimitMinutes} minutes)"
             }
         }
     }
