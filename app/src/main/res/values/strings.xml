@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">No More Shorts</string>
+    <string name="accessibility_service_label">NoMoreShorts</string>
+    <string name="accessibility_service_description">Stop scrolling on YouTube shorts</string>
+</resources>
