@@ -2,6 +2,7 @@ package me.zegs.nomoreshorts
 
 import android.accessibilityservice.AccessibilityService
 import android.content.SharedPreferences
+import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
 import android.widget.Toast
@@ -13,231 +14,499 @@ import me.zegs.nomoreshorts.settings.SettingsManager
 
 class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnSharedPreferenceChangeListener {
 
+    companion object {
+        private const val TAG = "ShortsAccessibilityService"
+        private const val YOUTUBE_PACKAGE = "com.google.android.youtube"
+        private const val BACK_ACTION_COOLDOWN_MS = 100L
+    }
+
     // A string storing the last found shorts content
     private var lastShortWatched: YouTubeShortsInfo? = null
-    private lateinit var settingsManager: SettingsManager
-    private lateinit var sessionManager: SessionManager
+    private var settingsManager: SettingsManager? = null
+    private var sessionManager: SessionManager? = null
     private var lastShortsClosedTime: Long = 0
+    private var isServiceInitialized: Boolean = false
 
     override fun onServiceConnected() {
-        super.onServiceConnected()
-        settingsManager = SettingsManager(this)
-        sessionManager = SessionManager(settingsManager)
+        try {
+            super.onServiceConnected()
+            Log.d(TAG, "Accessibility service connected")
 
-        // Setup session callbacks
-        sessionManager.onSessionReset = {}
-
-        sessionManager.onLimitReached = {
-            // Force close any current shorts and show detailed limit message
-            lastShortWatched?.let {
-                val detailedMessage = sessionManager.getLimitReachedMessage(this@ShortsAccessibilityService)
-                closeShorts(it, detailedMessage)
-            }
+            initializeService()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error during service connection", e)
+            handleInitializationError(e)
         }
+    }
 
-        settingsManager.addSharedPreferenceChangeListener(this)
+    private fun initializeService() {
+        try {
+            settingsManager = SettingsManager(this)
+
+            settingsManager?.let { sm ->
+                sessionManager = SessionManager(sm)
+
+                // Setup session callbacks with error handling
+                sessionManager?.let { sessMgr ->
+                    sessMgr.onSessionReset = {
+                        try {
+                            Log.d(TAG, "Session reset")
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error in session reset callback", e)
+                        }
+                    }
+
+                    sessMgr.onLimitReached = {
+                        try {
+                            // Force close any current shorts and show detailed limit message
+                            lastShortWatched?.let { shortsInfo ->
+                                val detailedMessage = sessMgr.getLimitReachedMessage(this@ShortsAccessibilityService)
+                                closeShorts(shortsInfo, detailedMessage)
+                            }
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error in limit reached callback", e)
+                            showToast(getString(R.string.shorts_swipe_limit_reached))
+                        }
+                    }
+                }
+
+                sm.addSharedPreferenceChangeListener(this)
+                isServiceInitialized = true
+                Log.d(TAG, "Service initialized successfully")
+            } ?: throw IllegalStateException("Failed to initialize SettingsManager")
+
+        } catch (e: Exception) {
+            Log.e(TAG, "Failed to initialize service", e)
+            handleInitializationError(e)
+        }
+    }
+
+    private fun handleInitializationError(e: Exception) {
+        try {
+            showToast("Accessibility service failed to initialize. Please restart the app.")
+            isServiceInitialized = false
+        } catch (toastError: Exception) {
+            Log.e(TAG, "Failed to show initialization error toast", toastError)
+        }
     }
 
     override fun onDestroy() {
-        super.onDestroy()
-        if (::settingsManager.isInitialized) {
-            settingsManager.removeSharedPreferenceChangeListener(this)
-        }
-        if (::sessionManager.isInitialized) {
-            sessionManager.cleanup()
+        try {
+            super.onDestroy()
+            Log.d(TAG, "Accessibility service destroying")
+
+            settingsManager?.let { sm ->
+                try {
+                    sm.removeSharedPreferenceChangeListener(this)
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error removing preference change listener", e)
+                }
+            }
+
+            sessionManager?.let { sessMgr ->
+                try {
+                    sessMgr.cleanup()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error cleaning up session manager", e)
+                }
+            }
+
+            isServiceInitialized = false
+            Log.d(TAG, "Service destroyed successfully")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error during service destruction", e)
         }
     }
 
     override fun onSharedPreferenceChanged(sharedPreferences: SharedPreferences?, key: String?) {
-        // React to settings changes and update session scheduling if needed
-        when (key) {
-            PreferenceKeys.RESET_PERIOD_TYPE,
-            PreferenceKeys.RESET_PERIOD_MINUTES,
-            PreferenceKeys.LIMIT_TYPE,
-            PreferenceKeys.SWIPE_LIMIT_COUNT,
-            PreferenceKeys.TIME_LIMIT_MINUTES -> {
-                if (::sessionManager.isInitialized) {
-                    sessionManager.updateResetSchedule()
+        try {
+            if (!isServiceInitialized) {
+                Log.w(TAG, "Service not initialized, ignoring preference change")
+                return
+            }
+
+            // React to settings changes and update session scheduling if needed
+            when (key) {
+                PreferenceKeys.RESET_PERIOD_TYPE,
+                PreferenceKeys.RESET_PERIOD_MINUTES,
+                PreferenceKeys.LIMIT_TYPE,
+                PreferenceKeys.SWIPE_LIMIT_COUNT,
+                PreferenceKeys.TIME_LIMIT_MINUTES -> {
+                    sessionManager?.let { sessMgr ->
+                        try {
+                            sessMgr.updateResetSchedule()
+                            Log.d(TAG, "Updated reset schedule for preference: $key")
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error updating reset schedule for preference: $key", e)
+                        }
+                    }
                 }
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error handling preference change for key: $key", e)
         }
     }
 
     private fun isAppEnabled(): Boolean {
-        return settingsManager.isAppEnabled && settingsManager.isInSchedule()
+        return try {
+            val settings = settingsManager
+            if (settings == null) {
+                Log.w(TAG, "SettingsManager is null, treating as disabled")
+                return false
+            }
+            settings.isAppEnabled && settings.isInSchedule()
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking if app is enabled", e)
+            false // Default to disabled on error
+        }
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
-        // Only process events if the app is enabled and in schedule
-        if (!::settingsManager.isInitialized || !isAppEnabled()) {
-            return
-        }
+        try {
+            // Only process events if the service is properly initialized and app is enabled
+            if (!isServiceInitialized || !isAppEnabled()) {
+                return
+            }
 
-        event?.let {
-            when (it.eventType) {
+            event?.let { accessibilityEvent ->
+                processAccessibilityEvent(accessibilityEvent)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error processing accessibility event", e)
+        }
+    }
+
+    private fun processAccessibilityEvent(event: AccessibilityEvent) {
+        try {
+            when (event.eventType) {
                 AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
-                    val rootNode = rootInActiveWindow
-                    rootNode?.let { node ->
-                        val shortsInfo = extractShortsInfo(node)
-                        if (shortsInfo != null) {
-                            if (lastShortWatched == shortsInfo) {
-                                return // Skip if the content is the same as the last watched
-                            }
-                            if (lastShortWatched != null) {
-                                // Handle new shorts content
-                                lastShortWatched = shortsInfo // Update the last watched shorts content
-                                handleShortsSwipe(shortsInfo)
-                            } else {
-                                lastShortWatched = shortsInfo // Update the last watched shorts content
-                                // Handle entering shorts for the first time
-                                handleShortsEntered(shortsInfo)
-                            }
-                        }
-                    }
+                    handleWindowContentChanged()
                 }
                 AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
-                    // This event is triggered when the active window changes
-                    // We can reset the last watched shorts content here
-                    lastShortWatched = null
+                    handleWindowStateChanged()
                 }
-                else -> {}
+                else -> {
+                    // Log other event types for debugging if needed
+                    Log.v(TAG, "Unhandled event type: ${event.eventType}")
+                }
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error processing event type: ${event.eventType}", e)
+        }
+    }
+
+    private fun handleWindowContentChanged() {
+        try {
+            val rootNode = rootInActiveWindow
+            if (rootNode == null) {
+                Log.v(TAG, "Root node is null, skipping content change")
+                return
+            }
+
+            val shortsInfo = extractShortsInfo(rootNode)
+            if (shortsInfo != null) {
+                processShortsInfo(shortsInfo)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error handling window content changed", e)
+        }
+    }
+
+    private fun handleWindowStateChanged() {
+        try {
+            // This event is triggered when the active window changes
+            // We can reset the last watched shorts content here
+            lastShortWatched = null
+            Log.v(TAG, "Window state changed, reset last watched short")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error handling window state changed", e)
+        }
+    }
+
+    private fun processShortsInfo(shortsInfo: YouTubeShortsInfo) {
+        try {
+            if (lastShortWatched == shortsInfo) {
+                return // Skip if the content is the same as the last watched
+            }
+
+            if (lastShortWatched != null) {
+                // Handle new shorts content (swipe)
+                lastShortWatched = shortsInfo
+                handleShortsSwipe(shortsInfo)
+            } else {
+                // Handle entering shorts for the first time
+                lastShortWatched = shortsInfo
+                handleShortsEntered(shortsInfo)
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error processing shorts info", e)
         }
     }
 
     private fun handleShortsEntered(shortsInfo: YouTubeShortsInfo) {
-        // This function is called when we enter shorts from any source
-        // Start a new session when entering shorts
-        sessionManager.startSession()
+        try {
+            Log.d(TAG, "Entered shorts: ${shortsInfo.title} by ${shortsInfo.account}")
 
-        if (shortsInfo.backButton == null && settingsManager.blockShortsFeed) {
-            closeShorts(shortsInfo, getString(R.string.shorts_feed_blocked))
-        } else if (settingsManager.blockingMode == BlockingMode.ALL_SHORTS) {
-            // If we are blocking all shorts, we close the shorts
-            closeShorts(shortsInfo, getString(R.string.all_shorts_blocked))
-        } else if (settingsManager.blockingMode == BlockingMode.ONLY_SWIPING &&
-            settingsManager.limitType == LimitType.SWIPE_COUNT) {
-            if (settingsManager.swipeLimitCount == 0
-                    && shortsInfo.backButton == null) {
+            // Start a new session when entering shorts
+            sessionManager?.let { sessMgr ->
+                try {
+                    sessMgr.startSession()
+                } catch (e: Exception) {
+                    Log.e(TAG, "Error starting session", e)
+                }
+            }
+
+            val settings = settingsManager ?: run {
+                Log.e(TAG, "SettingsManager is null in handleShortsEntered")
+                return
+            }
+
+            // Check various blocking conditions
+            when {
+                shortsInfo.backButton == null && settings.blockShortsFeed -> {
+                    closeShorts(shortsInfo, getString(R.string.shorts_feed_blocked))
+                }
+                settings.blockingMode == BlockingMode.ALL_SHORTS -> {
+                    closeShorts(shortsInfo, getString(R.string.all_shorts_blocked))
+                }
+                settings.blockingMode == BlockingMode.ONLY_SWIPING &&
+                settings.limitType == LimitType.SWIPE_COUNT -> {
+                    handleSwipeLimitOnEntry(shortsInfo, settings)
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error handling shorts entered", e)
+            // On error, show generic blocking message
+            try {
+                closeShorts(shortsInfo, getString(R.string.shorts_blocked))
+            } catch (closeError: Exception) {
+                Log.e(TAG, "Error closing shorts after handling error", closeError)
+            }
+        }
+    }
+
+    private fun handleSwipeLimitOnEntry(shortsInfo: YouTubeShortsInfo, settings: SettingsManager) {
+        try {
+            if (settings.swipeLimitCount == 0 && shortsInfo.backButton == null) {
                 closeShorts(shortsInfo, getString(R.string.no_shorts_feed_zero_swipe))
                 return
             }
-            if (sessionManager.isLimitReached()) {
-                closeShorts(shortsInfo, getString(R.string.shorts_swipe_limit_reached))
+
+            sessionManager?.let { sessMgr ->
+                if (sessMgr.isLimitReached()) {
+                    closeShorts(shortsInfo, getString(R.string.shorts_swipe_limit_reached))
+                }
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error handling swipe limit on entry", e)
         }
     }
 
     private fun handleShortsSwipe(shortsInfo: YouTubeShortsInfo) {
-        // This is called when swiping to new content within shorts
-        when (settingsManager.blockingMode) {
-            BlockingMode.ALL_SHORTS -> {
-                closeShorts(shortsInfo, getString(R.string.all_shorts_blocked))
+        try {
+            Log.d(TAG, "Swiped to: ${shortsInfo.title} by ${shortsInfo.account}")
+
+            val settings = settingsManager ?: run {
+                Log.e(TAG, "SettingsManager is null in handleShortsSwipe")
+                return
             }
 
-            BlockingMode.ONLY_SWIPING -> {
-                // Add a swipe and update time - this will check limits and potentially end the session
-                sessionManager.addSwipeAndUpdateTime()
-                // If the limit was hit, that will be dealt with in the session manager
+            when (settings.blockingMode) {
+                BlockingMode.ALL_SHORTS -> {
+                    closeShorts(shortsInfo, getString(R.string.all_shorts_blocked))
+                }
+                BlockingMode.ONLY_SWIPING -> {
+                    sessionManager?.let { sessMgr ->
+                        try {
+                            // Add a swipe and update time - this will check limits and potentially end the session
+                            sessMgr.addSwipeAndUpdateTime()
+                            // If the limit was hit, that will be dealt with in the session manager callback
+                        } catch (e: Exception) {
+                            Log.e(TAG, "Error adding swipe and updating time", e)
+                        }
+                    }
+                }
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error handling shorts swipe", e)
         }
     }
 
     private fun closeShorts(shortsInfo: YouTubeShortsInfo, reason: String = getString(R.string.shorts_blocked)) {
-        // We never close shorts if the channel is in the allowlist
-        // However, these do count towards limits, so we only perform that check here
-        if (settingsManager.allowlistEnabled &&
-            settingsManager.allowedChannels.any { allowedChannel ->
-                val normalizedAllowed = allowedChannel.removePrefix("@").lowercase()
-                val normalizedAccount = shortsInfo.account.removePrefix("@").lowercase()
-                normalizedAllowed == normalizedAccount
-            }
-        ) {
-            return
-        }
-
-        // Show toast notification explaining why shorts were closed
-        showToast(reason)
-
-        var shortsClosed = false
-        val currentTime = System.currentTimeMillis()
-        if (shortsInfo.backButton != null) {
-            val backButton = shortsInfo.backButton
-            if (backButton.isClickable) {
-                backButton.performAction(AccessibilityNodeInfo.ACTION_CLICK)
-                shortsClosed = true
-            }
-        }
-        if (!shortsClosed) {
-            // We couldn't close shorts with the normal back button, so we'll trigger a global back action
-            // We only want to perform the global back action if we haven't done it in the last 2 seconds
-            if (currentTime - lastShortsClosedTime < 100) {
+        try {
+            // Check if channel is in allowlist
+            if (isChannelAllowed(shortsInfo.account)) {
+                Log.d(TAG, "Channel ${shortsInfo.account} is in allowlist, not closing shorts")
                 return
             }
+
+            Log.d(TAG, "Closing shorts: $reason")
+
+            // Show toast notification explaining why shorts were closed
+            showToast(reason)
+
+            val currentTime = System.currentTimeMillis()
+            var shortsClosed = false
+
+            // Try to close using back button first
+            shortsInfo.backButton?.let { backButton ->
+                if (performBackButtonAction(backButton)) {
+                    shortsClosed = true
+                    Log.d(TAG, "Closed shorts using back button")
+                }
+            }
+
+            // Fallback to global back action if needed
+            if (!shortsClosed) {
+                performGlobalBackAction(currentTime)
+            }
+
             lastShortsClosedTime = currentTime
-            performGlobalAction(GLOBAL_ACTION_BACK)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error closing shorts", e)
+            // Try emergency fallback
+            try {
+                performGlobalAction(GLOBAL_ACTION_BACK)
+            } catch (fallbackError: Exception) {
+                Log.e(TAG, "Emergency fallback failed", fallbackError)
+            }
         }
-        lastShortsClosedTime = currentTime
+    }
+
+    private fun isChannelAllowed(account: String): Boolean {
+        return try {
+            val settings = settingsManager ?: return false
+
+            if (!settings.allowlistEnabled) {
+                return false
+            }
+
+            settings.allowedChannels.any { allowedChannel ->
+                val normalizedAllowed = allowedChannel.removePrefix("@").lowercase().trim()
+                val normalizedAccount = account.removePrefix("@").lowercase().trim()
+                normalizedAllowed == normalizedAccount
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking if channel is allowed: $account", e)
+            false // Default to not allowed on error
+        }
+    }
+
+    private fun performBackButtonAction(backButton: AccessibilityNodeInfo): Boolean {
+        return try {
+            if (backButton.isClickable) {
+                backButton.performAction(AccessibilityNodeInfo.ACTION_CLICK)
+                true
+            } else {
+                Log.w(TAG, "Back button is not clickable")
+                false
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error performing back button action", e)
+            false
+        }
+    }
+
+    private fun performGlobalBackAction(currentTime: Long) {
+        try {
+            // We only want to perform the global back action if we haven't done it recently
+            if (currentTime - lastShortsClosedTime < BACK_ACTION_COOLDOWN_MS) {
+                Log.v(TAG, "Back action cooldown active, skipping global back")
+                return
+            }
+
+            if (performGlobalAction(GLOBAL_ACTION_BACK)) {
+                Log.d(TAG, "Performed global back action")
+            } else {
+                Log.w(TAG, "Failed to perform global back action")
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error performing global back action", e)
+        }
     }
 
     private fun showToast(message: String) {
         try {
             Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            Log.e(TAG, "Error showing toast: $message", e)
         }
     }
 
     private fun extractShortsInfo(rootNode: AccessibilityNodeInfo): YouTubeShortsInfo? {
-        // This function detects whether the page is the YouTube Shorts page by checking if the structure
-        // of the page matches the expected structure. This will break if YouTube changes the structure,
-        // but it was the most reliable method with very few false positives.
-        if (rootNode.packageName != "com.google.android.youtube") {
-            return null
-        }
-
         return try {
+            // Validate package name first
+            if (rootNode.packageName != YOUTUBE_PACKAGE) {
+                Log.v(TAG, "Not YouTube app, package: ${rootNode.packageName}")
+                return null
+            }
+
             extractShortsInfoFromStructure(rootNode)
         } catch (e: Exception) {
-            // Log error without debug tree structure in production
-            e.printStackTrace()
+            Log.e(TAG, "Error extracting shorts info", e)
             null
         }
     }
 
     private fun extractShortsInfoFromStructure(rootNode: AccessibilityNodeInfo): YouTubeShortsInfo? {
-        if (rootNode.className != "android.widget.FrameLayout") {
-            return null
+        return try {
+            // Validate root structure
+            if (rootNode.className != "android.widget.FrameLayout") {
+                Log.v(TAG, "Root is not FrameLayout: ${rootNode.className}")
+                return null
+            }
+
+            val drawerLayout = safeGetChild(rootNode, 0) ?: return null
+            if (drawerLayout.className != "androidx.drawerlayout.widget.DrawerLayout") {
+                Log.v(TAG, "DrawerLayout not found: ${drawerLayout.className}")
+                return null
+            }
+
+            val secondFrameLayout = safeGetChild(drawerLayout, 0) ?: return null
+            if (secondFrameLayout.className != "android.widget.FrameLayout") {
+                Log.v(TAG, "Second FrameLayout not found: ${secondFrameLayout.className}")
+                return null
+            }
+
+            val thirdFrameLayout = safeGetChild(secondFrameLayout, 0) ?: return null
+            if (thirdFrameLayout.className != "android.widget.FrameLayout") {
+                Log.v(TAG, "Third FrameLayout not found: ${thirdFrameLayout.className}")
+                return null
+            }
+
+            val scrollView = safeGetChild(thirdFrameLayout, 0) ?: return null
+            if (scrollView.className != "android.widget.ScrollView") {
+                Log.v(TAG, "ScrollView not found: ${scrollView.className}")
+                return null
+            }
+
+            val (recyclerView, backViewGroup) = findScrollViewChildren(scrollView)
+            val (title, account) = extractTitleAndAccount(recyclerView)
+            val backButton = extractBackButton(backViewGroup)
+
+            // Return YouTubeShortsInfo if we have both title and account, otherwise null
+            if (title.isNotEmpty() && account.isNotEmpty()) {
+                YouTubeShortsInfo(title, account, backButton)
+            } else {
+                Log.v(TAG, "Missing title or account: title='$title', account='$account'")
+                null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error extracting from structure", e)
+            null
         }
+    }
 
-        val drawerLayout = rootNode.getChild(0)
-        if (drawerLayout?.className != "androidx.drawerlayout.widget.DrawerLayout") {
-            return null
-        }
-
-        val secondFrameLayout = drawerLayout.getChild(0)
-        if (secondFrameLayout?.className != "android.widget.FrameLayout") {
-            return null
-        }
-
-        val thirdFrameLayout = secondFrameLayout.getChild(0)
-        if (thirdFrameLayout?.className != "android.widget.FrameLayout") {
-            return null
-        }
-
-        val scrollView = thirdFrameLayout.getChild(0)
-        if (scrollView?.className != "android.widget.ScrollView") {
-            return null
-        }
-
-        val (recyclerView, backViewGroup) = findScrollViewChildren(scrollView)
-
-        val (title, account) = extractTitleAndAccount(recyclerView)
-        val backButton = extractBackButton(backViewGroup)
-
-        // Return YouTubeShortsInfo if we have both title and account, otherwise null
-        return if (title.isNotEmpty() && account.isNotEmpty()) {
-            YouTubeShortsInfo(title, account, backButton)
-        } else {
+    private fun safeGetChild(node: AccessibilityNodeInfo, index: Int): AccessibilityNodeInfo? {
+        return try {
+            if (index < node.childCount) {
+                node.getChild(index)
+            } else {
+                Log.v(TAG, "Child index $index out of bounds (childCount: ${node.childCount})")
+                null
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting child at index $index", e)
             null
         }
     }
@@ -246,12 +515,16 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
         var recyclerView: AccessibilityNodeInfo? = null
         var backViewGroup: AccessibilityNodeInfo? = null
 
-        for (i in 0 until scrollView.childCount) {
-            val child = scrollView.getChild(i)
-            when (child?.className) {
-                "android.support.v7.widget.RecyclerView" -> recyclerView = child
-                "android.view.ViewGroup" -> backViewGroup = child
+        try {
+            for (i in 0 until scrollView.childCount) {
+                val child = safeGetChild(scrollView, i) ?: continue
+                when (child.className) {
+                    "android.support.v7.widget.RecyclerView" -> recyclerView = child
+                    "android.view.ViewGroup" -> backViewGroup = child
+                }
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error finding scroll view children", e)
         }
 
         return Pair(recyclerView, backViewGroup)
@@ -259,97 +532,110 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
 
     private fun extractTitleAndAccount(recyclerView: AccessibilityNodeInfo?): Pair<String, String> {
         if (recyclerView == null) {
+            Log.v(TAG, "RecyclerView is null")
             return Pair("", "")
         }
 
-        val frameLayout = recyclerView.getChild(0)
-        if (frameLayout?.className != "android.widget.FrameLayout") {
-            return Pair("", "")
-        }
-
-        var title = ""
-        var account = ""
-
-        for (i in 0 until frameLayout.childCount) {
-            val viewGroup = frameLayout.getChild(i)
-            if (viewGroup == null || viewGroup.childCount == 0) {
-                continue // If there are no children, there is no title or account
+        return try {
+            val frameLayout = safeGetChild(recyclerView, 0)
+            if (frameLayout?.className != "android.widget.FrameLayout") {
+                Log.v(TAG, "FrameLayout not found in RecyclerView")
+                return Pair("", "")
             }
 
-            if (viewGroup.className == "android.view.ViewGroup") {
-                // It's one of the children, but which one seems to differ. We'll just try them all
-                for (j in 0 until viewGroup.childCount) {
-                    val shortsInfoGroup = viewGroup.getChild(j)
-                    if (shortsInfoGroup != null && shortsInfoGroup.childCount == 0) {
-                        continue // If there are no children, there is no title or account
-                    }
+            var title = ""
+            var account = ""
 
-                    if (shortsInfoGroup?.className == "android.view.ViewGroup") {
-                        // Try to extract account information
-                        if (account.isEmpty()) {
-                            account = extractAccountFromShortsInfo(shortsInfoGroup)
-                        }
+            for (i in 0 until frameLayout.childCount) {
+                val viewGroup = safeGetChild(frameLayout, i) ?: continue
 
-                        // Try to extract title information
-                        if (title.isEmpty()) {
-                            title = extractTitleFromShortsInfo(shortsInfoGroup)
+                if (viewGroup.className == "android.view.ViewGroup" && viewGroup.childCount > 0) {
+                    for (j in 0 until viewGroup.childCount) {
+                        val shortsInfoGroup = safeGetChild(viewGroup, j) ?: continue
+
+                        if (shortsInfoGroup.className == "android.view.ViewGroup" && shortsInfoGroup.childCount > 0) {
+                            // Try to extract account information
+                            if (account.isEmpty()) {
+                                account = extractAccountFromShortsInfo(shortsInfoGroup)
+                            }
+
+                            // Try to extract title information
+                            if (title.isEmpty()) {
+                                title = extractTitleFromShortsInfo(shortsInfoGroup)
+                            }
                         }
                     }
                 }
             }
-        }
 
-        return Pair(title, account)
+            Pair(title, account)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error extracting title and account", e)
+            Pair("", "")
+        }
     }
 
     private fun extractAccountFromShortsInfo(shortsInfoGroup: AccessibilityNodeInfo): String {
-        val accountView2 = shortsInfoGroup.getChild(0)
-        if (accountView2?.className == "android.view.ViewGroup" && accountView2.childCount > 1) {
-            val accountView3 = accountView2.getChild(1)
-            if (accountView3?.className == "android.view.ViewGroup") {
-                val accountNode = accountView3.getChild(0)
-                if (accountNode?.className == "android.view.ViewGroup") {
-                    return accountNode.text?.toString() ?: ""
+        return try {
+            val accountView2 = safeGetChild(shortsInfoGroup, 0) ?: return ""
+            if (accountView2.className == "android.view.ViewGroup" && accountView2.childCount > 1) {
+                val accountView3 = safeGetChild(accountView2, 1) ?: return ""
+                if (accountView3.className == "android.view.ViewGroup") {
+                    val accountNode = safeGetChild(accountView3, 0) ?: return ""
+                    if (accountNode.className == "android.view.ViewGroup") {
+                        return accountNode.text?.toString() ?: ""
+                    }
                 }
             }
+            ""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error extracting account", e)
+            ""
         }
-        return ""
     }
 
     private fun extractTitleFromShortsInfo(shortsInfoGroup: AccessibilityNodeInfo): String {
-        val titleGroup2 = shortsInfoGroup.getChild(0)
-        if (titleGroup2?.className == "android.view.ViewGroup") {
-            val titleGroup3 = titleGroup2.getChild(0)
-            if (titleGroup3?.className == "android.view.ViewGroup") {
-                val titleNode = titleGroup3.getChild(0)
-                if (titleNode?.className == "android.view.ViewGroup") {
-                    return titleNode.text?.toString() ?: ""
+        return try {
+            val titleGroup2 = safeGetChild(shortsInfoGroup, 0) ?: return ""
+            if (titleGroup2.className == "android.view.ViewGroup") {
+                val titleGroup3 = safeGetChild(titleGroup2, 0) ?: return ""
+                if (titleGroup3.className == "android.view.ViewGroup") {
+                    val titleNode = safeGetChild(titleGroup3, 0) ?: return ""
+                    if (titleNode.className == "android.view.ViewGroup") {
+                        return titleNode.text?.toString() ?: ""
+                    }
                 }
             }
+            ""
+        } catch (e: Exception) {
+            Log.e(TAG, "Error extracting title", e)
+            ""
         }
-        return ""
     }
 
     private fun extractBackButton(backViewGroup: AccessibilityNodeInfo?): AccessibilityNodeInfo? {
-        if (backViewGroup != null) {
-            // Make sure the first child is an ImageButton, and if so, we store it as the back button
-            val backButtonNode = backViewGroup.getChild(0)
-            if (backButtonNode?.className == "android.widget.ImageButton") {
-                return backButtonNode
+        return try {
+            if (backViewGroup != null) {
+                // Make sure the first child is an ImageButton, and if so, we store it as the back button
+                val backButtonNode = safeGetChild(backViewGroup, 0)
+                if (backButtonNode?.className == "android.widget.ImageButton") {
+                    return backButtonNode
+                }
             }
-        }
-        return null
-    }
-
-    // Helper function to recursively extract text from nodes
-    private fun extractTextFromNode(node: AccessibilityNodeInfo, content: StringBuilder) {
-        node.text?.let { content.append(it).append("\n") }
-        for (i in 0 until node.childCount) {
-            node.getChild(i)?.let { extractTextFromNode(it, content) }
+            null
+        } catch (e: Exception) {
+            Log.e(TAG, "Error extracting back button", e)
+            null
         }
     }
 
     override fun onInterrupt() {
-        // Handle service interruption here
+        try {
+            Log.d(TAG, "Accessibility service interrupted")
+            // Handle service interruption here
+            isServiceInitialized = false
+        } catch (e: Exception) {
+            Log.e(TAG, "Error handling service interruption", e)
+        }
     }
 }
