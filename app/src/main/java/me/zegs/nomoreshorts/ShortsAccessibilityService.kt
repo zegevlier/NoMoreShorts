@@ -116,9 +116,15 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
             // If we are blocking all shorts, we close the shorts
             closeShorts(shortsInfo, getString(R.string.all_shorts_blocked))
         } else if (settingsManager.blockingMode == BlockingMode.ONLY_SWIPING &&
-            settingsManager.limitType == LimitType.SWIPE_COUNT && settingsManager.swipeLimitCount == 0
-            && shortsInfo.backButton == null) {
-            closeShorts(shortsInfo, getString(R.string.no_shorts_feed_zero_swipe))
+            settingsManager.limitType == LimitType.SWIPE_COUNT) {
+            if (settingsManager.swipeLimitCount == 0
+                    && shortsInfo.backButton == null) {
+                closeShorts(shortsInfo, getString(R.string.no_shorts_feed_zero_swipe))
+                return
+            }
+            if (sessionManager.isLimitReached()) {
+                closeShorts(shortsInfo, getString(R.string.shorts_swipe_limit_reached))
+            }
         }
     }
 

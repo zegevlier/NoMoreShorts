@@ -106,5 +106,6 @@
     <!-- Preference keys for manage_channels (if needed in code) -->
     <string name="manage_channels_key">manage_channels</string>
     <string name="swipe_limiting_category_key">swipe_limiting_category</string>
+    <string name="shorts_swipe_limit_reached">Swipe limit reached</string>
 
 </resources>
