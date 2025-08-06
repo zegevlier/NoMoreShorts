@@ -2,6 +2,7 @@ package me.zegs.nomoreshorts.settings
 
 import android.content.Context
 import android.content.SharedPreferences
+import android.util.Log
 import androidx.preference.PreferenceManager
 import com.google.gson.Gson
 import com.google.gson.reflect.TypeToken
@@ -10,174 +11,353 @@ import me.zegs.nomoreshorts.models.LimitType
 import me.zegs.nomoreshorts.models.PreferenceKeys
 import me.zegs.nomoreshorts.models.ResetPeriodType
 import androidx.core.content.edit
+import java.util.Calendar
 
 class SettingsManager(context: Context) {
     private val prefs: SharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
     private val gson = Gson()
 
-    // Master Control
-    var isAppEnabled: Boolean
-        get() = prefs.getBoolean(PreferenceKeys.APP_ENABLED, false)
-        set(value) = prefs.edit { putBoolean(PreferenceKeys.APP_ENABLED, value) }
+    companion object {
+        private const val TAG = "SettingsManager"
 
-    // Blocking Configuration
+        // Validation constants
+        private const val MIN_SWIPE_LIMIT = 0
+        private const val MAX_SWIPE_LIMIT = 10000
+        private const val MIN_TIME_LIMIT = 1
+        private const val MAX_TIME_LIMIT = 1440 // 24 hours
+        private const val MIN_RESET_PERIOD = 1
+        private const val MAX_RESET_PERIOD = 10080 // 1 week in minutes
+
+        // Default values
+        private const val DEFAULT_SWIPE_LIMIT = 0
+        private const val DEFAULT_TIME_LIMIT = 30
+        private const val DEFAULT_RESET_PERIOD = 60
+        private const val DEFAULT_START_TIME = "09:00"
+        private const val DEFAULT_END_TIME = "22:00"
+    }
+
+    // Master Control with validation
+    var isAppEnabled: Boolean
+        get() = safeGetBoolean(PreferenceKeys.APP_ENABLED, false)
+        set(value) = safeSetBoolean(PreferenceKeys.APP_ENABLED, value)
+
+    // Blocking Configuration with validation
     var blockShortsFeed: Boolean
-        get() = prefs.getBoolean(PreferenceKeys.BLOCK_FEED, true)
-        set(value) = prefs.edit { putBoolean(PreferenceKeys.BLOCK_FEED, value)}
+        get() = safeGetBoolean(PreferenceKeys.BLOCK_FEED, true)
+        set(value) = safeSetBoolean(PreferenceKeys.BLOCK_FEED, value)
 
     var blockingMode: BlockingMode
-        get() {
-            val mode = prefs.getString(PreferenceKeys.BLOCKING_MODE, BlockingMode.ALL_SHORTS.name)
-            return try {
-                BlockingMode.valueOf(mode ?: BlockingMode.ALL_SHORTS.name)
-            } catch (_: IllegalArgumentException) {
-                BlockingMode.ALL_SHORTS
-            }
-        }
-        set(value) = prefs.edit { putString(PreferenceKeys.BLOCKING_MODE, value.name)}
+        get() = safeGetEnum(PreferenceKeys.BLOCKING_MODE, BlockingMode.ALL_SHORTS) { BlockingMode.valueOf(it) }
+        set(value) = safeSetEnum(PreferenceKeys.BLOCKING_MODE, value)
 
-    // Limit Configuration
+    // Limit Configuration with validation
     var limitType: LimitType
-        get() {
-            val type = prefs.getString(PreferenceKeys.LIMIT_TYPE, LimitType.SWIPE_COUNT.name)
-            return try {
-                LimitType.valueOf(type ?: LimitType.SWIPE_COUNT.name)
-            } catch (_: IllegalArgumentException) {
-                LimitType.SWIPE_COUNT
-            }
-        }
-        set(value) = prefs.edit { putString(PreferenceKeys.LIMIT_TYPE, value.name)}
+        get() = safeGetEnum(PreferenceKeys.LIMIT_TYPE, LimitType.SWIPE_COUNT) { LimitType.valueOf(it) }
+        set(value) = safeSetEnum(PreferenceKeys.LIMIT_TYPE, value)
 
-    // Swipe Limiting
+    // Swipe Limiting with comprehensive validation
     var swipeLimitCount: Int
         get() {
-            val stringValue = prefs.getString(PreferenceKeys.SWIPE_LIMIT_COUNT, "0") ?: "0"
-            return stringValue.toIntOrNull()?.coerceIn(0, 1000) ?: 0
+            val stringValue = safeGetString(PreferenceKeys.SWIPE_LIMIT_COUNT, DEFAULT_SWIPE_LIMIT.toString())
+            return validateAndCoerceInt(stringValue, MIN_SWIPE_LIMIT, MAX_SWIPE_LIMIT, DEFAULT_SWIPE_LIMIT)
         }
         set(value) {
-            prefs.edit { putString(PreferenceKeys.SWIPE_LIMIT_COUNT, value.coerceIn(0, 1000).toString()) }
+            val validatedValue = validateAndCoerceInt(value.toString(), MIN_SWIPE_LIMIT, MAX_SWIPE_LIMIT, DEFAULT_SWIPE_LIMIT)
+            safeSetString(PreferenceKeys.SWIPE_LIMIT_COUNT, validatedValue.toString())
         }
 
     var timeLimitMinutes: Int
         get() {
-            val stringValue = prefs.getString(PreferenceKeys.TIME_LIMIT_MINUTES, "30") ?: "30"
-            return stringValue.toIntOrNull()?.coerceAtLeast(1) ?: 30
+            val stringValue = safeGetString(PreferenceKeys.TIME_LIMIT_MINUTES, DEFAULT_TIME_LIMIT.toString())
+            return validateAndCoerceInt(stringValue, MIN_TIME_LIMIT, MAX_TIME_LIMIT, DEFAULT_TIME_LIMIT)
         }
         set(value) {
-            prefs.edit { putString(PreferenceKeys.TIME_LIMIT_MINUTES, value.coerceAtLeast(1).toString()) }
+            val validatedValue = validateAndCoerceInt(value.toString(), MIN_TIME_LIMIT, MAX_TIME_LIMIT, DEFAULT_TIME_LIMIT)
+            safeSetString(PreferenceKeys.TIME_LIMIT_MINUTES, validatedValue.toString())
         }
 
     var resetPeriodType: ResetPeriodType
-        get() {
-            val type = prefs.getString(PreferenceKeys.RESET_PERIOD_TYPE, ResetPeriodType.PER_DAY.name)
-            return try {
-                ResetPeriodType.valueOf(type ?: ResetPeriodType.PER_DAY.name)
-            } catch (_: IllegalArgumentException) {
-                ResetPeriodType.PER_DAY
-            }
-        }
-        set(value) = prefs.edit {putString(PreferenceKeys.RESET_PERIOD_TYPE, value.name) }
+        get() = safeGetEnum(PreferenceKeys.RESET_PERIOD_TYPE, ResetPeriodType.PER_DAY) { ResetPeriodType.valueOf(it) }
+        set(value) = safeSetEnum(PreferenceKeys.RESET_PERIOD_TYPE, value)
 
     var resetPeriodMinutes: Int
         get() {
-            val stringValue = prefs.getString(PreferenceKeys.RESET_PERIOD_MINUTES, "60") ?: "60"
-            return stringValue.toIntOrNull()?.coerceAtLeast(1) ?: 60
+            val stringValue = safeGetString(PreferenceKeys.RESET_PERIOD_MINUTES, DEFAULT_RESET_PERIOD.toString())
+            return validateAndCoerceInt(stringValue, MIN_RESET_PERIOD, MAX_RESET_PERIOD, DEFAULT_RESET_PERIOD)
         }
         set(value) {
-            prefs.edit {putString(PreferenceKeys.RESET_PERIOD_MINUTES, value.coerceAtLeast(1).toString()) }
+            val validatedValue = validateAndCoerceInt(value.toString(), MIN_RESET_PERIOD, MAX_RESET_PERIOD, DEFAULT_RESET_PERIOD)
+            safeSetString(PreferenceKeys.RESET_PERIOD_MINUTES, validatedValue.toString())
         }
 
-    // Scheduling
+    // Scheduling with validation
     var scheduleEnabled: Boolean
-        get() = prefs.getBoolean(PreferenceKeys.SCHEDULE_ENABLED, false)
-        set(value) = prefs.edit {putBoolean(PreferenceKeys.SCHEDULE_ENABLED, value) }
+        get() = safeGetBoolean(PreferenceKeys.SCHEDULE_ENABLED, false)
+        set(value) = safeSetBoolean(PreferenceKeys.SCHEDULE_ENABLED, value)
 
     var scheduleStartTime: String
-        get() = prefs.getString(PreferenceKeys.SCHEDULE_START_TIME, "09:00") ?: "09:00"
-        set(value) = prefs.edit {putString(PreferenceKeys.SCHEDULE_START_TIME, value) }
+        get() = validateTimeString(safeGetString(PreferenceKeys.SCHEDULE_START_TIME, DEFAULT_START_TIME))
+        set(value) = safeSetString(PreferenceKeys.SCHEDULE_START_TIME, validateTimeString(value))
 
     var scheduleEndTime: String
-        get() = prefs.getString(PreferenceKeys.SCHEDULE_END_TIME, "22:00") ?: "22:00"
-        set(value) = prefs.edit {putString(PreferenceKeys.SCHEDULE_END_TIME, value) }
+        get() = validateTimeString(safeGetString(PreferenceKeys.SCHEDULE_END_TIME, DEFAULT_END_TIME))
+        set(value) = safeSetString(PreferenceKeys.SCHEDULE_END_TIME, validateTimeString(value))
 
     var scheduleDays: Set<String>
         get() {
-            // First, try to get it as a Set<String> (MultiSelectListPreference format)
-            try {
+            return try {
+                // First, try to get it as a Set<String> (MultiSelectListPreference format)
                 val directSet = prefs.getStringSet(PreferenceKeys.SCHEDULE_DAYS, null)
-                if (directSet != null) {
-                    return directSet
+                if (directSet != null && directSet.isNotEmpty()) {
+                    validateDaysSet(directSet)
+                } else {
+                    // Fallback to JSON format
+                    val daysJson = safeGetString(PreferenceKeys.SCHEDULE_DAYS, null)
+                    if (!daysJson.isNullOrEmpty()) {
+                        val type = object : TypeToken<Set<String>>() {}.type
+                        val parsedSet: Set<String> = gson.fromJson(daysJson, type) ?: getDefaultDays()
+                        validateDaysSet(parsedSet)
+                    } else {
+                        getDefaultDays()
+                    }
                 }
-            } catch (_: Exception) {
-                // If that fails, try to get it as a JSON string
-            }
-
-            // Fallback to JSON format
-            val daysJson = prefs.getString(PreferenceKeys.SCHEDULE_DAYS, null)
-            return if (daysJson != null) {
-                try {
-                    val type = object : TypeToken<Set<String>>() {}.type
-                    gson.fromJson(daysJson, type)
-                } catch (_: Exception) {
-                    getDefaultDays()
-                }
-            } else {
+            } catch (e: Exception) {
+                Log.e(TAG, "Error getting schedule days, using defaults", e)
                 getDefaultDays()
             }
         }
         set(value) {
-            // Store as StringSet for MultiSelectListPreference compatibility
-            prefs.edit {putStringSet(PreferenceKeys.SCHEDULE_DAYS, value.toSet()) }
+            try {
+                val validatedDays = validateDaysSet(value)
+                // Store as StringSet for MultiSelectListPreference compatibility
+                prefs.edit { putStringSet(PreferenceKeys.SCHEDULE_DAYS, validatedDays) }
+            } catch (e: Exception) {
+                Log.e(TAG, "Error setting schedule days", e)
+            }
         }
 
-    // Channel Allowlist
+    // Channel Allowlist with validation
     var allowlistEnabled: Boolean
-        get() = prefs.getBoolean(PreferenceKeys.ALLOWLIST_ENABLED, false)
-        set(value) = prefs.edit {putBoolean(PreferenceKeys.ALLOWLIST_ENABLED, value) }
+        get() = safeGetBoolean(PreferenceKeys.ALLOWLIST_ENABLED, false)
+        set(value) = safeSetBoolean(PreferenceKeys.ALLOWLIST_ENABLED, value)
 
     var allowedChannels: List<String>
         get() {
-            val channelsJson = prefs.getString(PreferenceKeys.ALLOWED_CHANNELS, null)
-            return if (channelsJson != null) {
-                try {
+            return try {
+                val channelsJson = safeGetString(PreferenceKeys.ALLOWED_CHANNELS, null)
+                if (!channelsJson.isNullOrEmpty()) {
                     val type = object : TypeToken<List<String>>() {}.type
-                    gson.fromJson(channelsJson, type) ?: emptyList()
-                } catch (e: Exception) {
+                    val channels: List<String> = gson.fromJson(channelsJson, type) ?: emptyList()
+                    validateChannelList(channels)
+                } else {
                     emptyList()
                 }
-            } else {
+            } catch (e: Exception) {
+                Log.e(TAG, "Error getting allowed channels, returning empty list", e)
                 emptyList()
             }
         }
         set(value) {
-            val channelsJson = gson.toJson(value)
-            prefs.edit {putString(PreferenceKeys.ALLOWED_CHANNELS, channelsJson) }
+            try {
+                val validatedChannels = validateChannelList(value)
+                val channelsJson = gson.toJson(validatedChannels)
+                safeSetString(PreferenceKeys.ALLOWED_CHANNELS, channelsJson)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error setting allowed channels", e)
+            }
         }
+
+    // Safe preference access methods with error handling
+    private fun safeGetBoolean(key: String, defaultValue: Boolean): Boolean {
+        return try {
+            prefs.getBoolean(key, defaultValue)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting boolean preference $key, using default: $defaultValue", e)
+            defaultValue
+        }
+    }
+
+    private fun safeSetBoolean(key: String, value: Boolean) {
+        try {
+            prefs.edit { putBoolean(key, value) }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting boolean preference $key to $value", e)
+        }
+    }
+
+    private fun safeGetString(key: String, defaultValue: String?): String? {
+        return try {
+            prefs.getString(key, defaultValue)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting string preference $key, using default: $defaultValue", e)
+            defaultValue
+        }
+    }
+
+    private fun safeSetString(key: String, value: String?) {
+        try {
+            prefs.edit { putString(key, value) }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting string preference $key to $value", e)
+        }
+    }
+
+    private inline fun <reified T : Enum<T>> safeGetEnum(key: String, defaultValue: T, valueOf: (String) -> T): T {
+        return try {
+            val stringValue = safeGetString(key, defaultValue.name) ?: defaultValue.name
+            valueOf(stringValue)
+        } catch (e: IllegalArgumentException) {
+            Log.e(TAG, "Invalid enum value for $key, using default: $defaultValue", e)
+            defaultValue
+        } catch (e: Exception) {
+            Log.e(TAG, "Error getting enum preference $key, using default: $defaultValue", e)
+            defaultValue
+        }
+    }
+
+    private fun <T : Enum<T>> safeSetEnum(key: String, value: T) {
+        try {
+            safeSetString(key, value.name)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error setting enum preference $key to ${value.name}", e)
+        }
+    }
+
+    // Validation helper methods
+    private fun validateAndCoerceInt(value: String?, min: Int, max: Int, default: Int): Int {
+        return try {
+            if (value.isNullOrBlank()) {
+                Log.w(TAG, "Empty integer value, using default: $default")
+                return default
+            }
+            val intValue = value.toIntOrNull()
+            when {
+                intValue == null -> {
+                    Log.w(TAG, "Invalid integer value: $value, using default: $default")
+                    default
+                }
+                intValue < min -> {
+                    Log.w(TAG, "Value $intValue below minimum $min, coercing to $min")
+                    min
+                }
+                intValue > max -> {
+                    Log.w(TAG, "Value $intValue above maximum $max, coercing to $max")
+                    max
+                }
+                else -> intValue
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error validating integer value: $value, using default: $default", e)
+            default
+        }
+    }
+
+    private fun validateTimeString(timeString: String?): String {
+        if (timeString.isNullOrBlank()) {
+            Log.w(TAG, "Empty time string, using default")
+            return DEFAULT_START_TIME
+        }
+
+        return try {
+            val parts = timeString.split(":")
+            if (parts.size == 2) {
+                val hour = parts[0].toIntOrNull()?.coerceIn(0, 23)
+                val minute = parts[1].toIntOrNull()?.coerceIn(0, 59)
+
+                if (hour != null && minute != null) {
+                    String.format("%02d:%02d", hour, minute)
+                } else {
+                    Log.w(TAG, "Invalid time format: $timeString, using default")
+                    DEFAULT_START_TIME
+                }
+            } else {
+                Log.w(TAG, "Invalid time format: $timeString, using default")
+                DEFAULT_START_TIME
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error validating time string: $timeString, using default", e)
+            DEFAULT_START_TIME
+        }
+    }
+
+    private fun validateDaysSet(days: Set<String>): Set<String> {
+        val validDays = setOf("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
+        return try {
+            val filteredDays = days.filter { day ->
+                val isValid = day.lowercase() in validDays
+                if (!isValid) {
+                    Log.w(TAG, "Invalid day of week: $day, filtering out")
+                }
+                isValid
+            }.map { it.lowercase() }.toSet()
+
+            if (filteredDays.isEmpty()) {
+                Log.w(TAG, "No valid days provided, using all days")
+                getDefaultDays()
+            } else {
+                filteredDays
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error validating days set, using defaults", e)
+            getDefaultDays()
+        }
+    }
+
+    private fun validateChannelList(channels: List<String>): List<String> {
+        return try {
+            channels.filter { channel ->
+                val isValid = channel.isNotBlank() && channel.length <= 100 // Reasonable limit
+                if (!isValid) {
+                    Log.w(TAG, "Invalid channel name: '$channel', filtering out")
+                }
+                isValid
+            }.distinct() // Remove duplicates
+        } catch (e: Exception) {
+            Log.e(TAG, "Error validating channel list, returning empty list", e)
+            emptyList()
+        }
+    }
 
     private fun getDefaultDays(): Set<String> {
         return setOf("monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday")
     }
 
     fun isEnabledOnDay(day: Int): Boolean {
-        val days = scheduleDays.map { it.lowercase() }
-        return when (day) {
-            1 -> "monday" in days
-            2 -> "tuesday" in days
-            3 -> "wednesday" in days
-            4 -> "thursday" in days
-            5 -> "friday" in days
-            6 -> "saturday" in days
-            7 -> "sunday" in days
-            else -> false
+        return try {
+            val days = scheduleDays.map { it.lowercase() }
+            when (day) {
+                Calendar.MONDAY -> "monday" in days
+                Calendar.TUESDAY -> "tuesday" in days
+                Calendar.WEDNESDAY -> "wednesday" in days
+                Calendar.THURSDAY -> "thursday" in days
+                Calendar.FRIDAY -> "friday" in days
+                Calendar.SATURDAY -> "saturday" in days
+                Calendar.SUNDAY -> "sunday" in days
+                else -> {
+                    Log.w(TAG, "Invalid day of week: $day")
+                    false
+                }
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking if enabled on day $day", e)
+            false
         }
     }
 
     fun addSharedPreferenceChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener) {
-        prefs.registerOnSharedPreferenceChangeListener(listener)
+        try {
+            prefs.registerOnSharedPreferenceChangeListener(listener)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error registering preference change listener", e)
+        }
     }
 
     fun removeSharedPreferenceChangeListener(listener: SharedPreferences.OnSharedPreferenceChangeListener) {
-        prefs.unregisterOnSharedPreferenceChangeListener(listener)
+        try {
+            prefs.unregisterOnSharedPreferenceChangeListener(listener)
+        } catch (e: Exception) {
+            Log.e(TAG, "Error unregistering preference change listener", e)
+        }
     }
 
     fun getStartTimeAsMillisToday(): Long {
@@ -189,53 +369,105 @@ class SettingsManager(context: Context) {
     }
 
     private fun getTimeInMillis(time: String): Long {
-        val parts = time.split(":")
-        if (parts.size != 2) return 0L
-        val hours = parts[0].toIntOrNull() ?: return 0L
-        val minutes = parts[1].toIntOrNull() ?: return 0L
-        val calendar = java.util.Calendar.getInstance()
-        calendar.set(java.util.Calendar.HOUR_OF_DAY, hours)
-        calendar.set(java.util.Calendar.MINUTE, minutes)
-        calendar.set(java.util.Calendar.SECOND, 0)
-        return calendar.timeInMillis
+        return try {
+            val parts = time.split(":")
+            if (parts.size != 2) return 0L
+
+            val hours = parts[0].toIntOrNull() ?: return 0L
+            val minutes = parts[1].toIntOrNull() ?: return 0L
+
+            if (hours !in 0..23 || minutes !in 0..59) return 0L
+
+            val calendar = Calendar.getInstance()
+            calendar.set(Calendar.HOUR_OF_DAY, hours)
+            calendar.set(Calendar.MINUTE, minutes)
+            calendar.set(Calendar.SECOND, 0)
+            calendar.set(Calendar.MILLISECOND, 0)
+            calendar.timeInMillis
+        } catch (e: Exception) {
+            Log.e(TAG, "Error converting time to millis: $time", e)
+            0L
+        }
     }
 
     fun getSessionTimeoutMillis(): Long {
-        return when (resetPeriodType) {
-            ResetPeriodType.AFTER_SESSION_END -> resetPeriodMinutes * 60 * 1000L
-            ResetPeriodType.PER_DAY -> {
-                // For per day, calculate milliseconds until midnight
-                val calendar = java.util.Calendar.getInstance()
-                calendar.add(java.util.Calendar.DAY_OF_MONTH, 1)
-                calendar.set(java.util.Calendar.HOUR_OF_DAY, 0)
-                calendar.set(java.util.Calendar.MINUTE, 0)
-                calendar.set(java.util.Calendar.SECOND, 0)
-                calendar.set(java.util.Calendar.MILLISECOND, 0)
-                calendar.timeInMillis - System.currentTimeMillis()
+        return try {
+            when (resetPeriodType) {
+                ResetPeriodType.AFTER_SESSION_END -> {
+                    val minutes = resetPeriodMinutes.toLong()
+                    if (minutes > 0) minutes * 60 * 1000L else 60 * 60 * 1000L // Default to 1 hour
+                }
+                ResetPeriodType.PER_DAY -> {
+                    // For per day, calculate milliseconds until midnight
+                    val calendar = Calendar.getInstance()
+                    calendar.add(Calendar.DAY_OF_MONTH, 1)
+                    calendar.set(Calendar.HOUR_OF_DAY, 0)
+                    calendar.set(Calendar.MINUTE, 0)
+                    calendar.set(Calendar.SECOND, 0)
+                    calendar.set(Calendar.MILLISECOND, 0)
+                    val timeout = calendar.timeInMillis - System.currentTimeMillis()
+                    if (timeout > 0) timeout else 24 * 60 * 60 * 1000L // Default to 24 hours
+                }
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error calculating session timeout", e)
+            60 * 60 * 1000L // Default to 1 hour
         }
     }
 
     fun isInSchedule(): Boolean {
-        if (!scheduleEnabled) return true
+        return try {
+            if (!scheduleEnabled) return true
 
-        val calendar = java.util.Calendar.getInstance()
-        val currentDay = calendar.get(java.util.Calendar.DAY_OF_WEEK)
+            val calendar = Calendar.getInstance()
+            val currentDay = calendar.get(Calendar.DAY_OF_WEEK)
 
-        // Check if today is enabled
-        if (!isEnabledOnDay(currentDay)) return false
+            // Check if today is enabled
+            if (!isEnabledOnDay(currentDay)) return false
 
-        // Check if current time is within schedule
-        val currentTimeMillis = calendar.timeInMillis
-        val todayStart = getStartTimeAsMillisToday()
-        val todayEnd = getEndTimeAsMillisToday()
+            // Check if current time is within schedule
+            val currentTimeMillis = calendar.timeInMillis
+            val todayStart = getStartTimeAsMillisToday()
+            val todayEnd = getEndTimeAsMillisToday()
 
-        return if (todayEnd > todayStart) {
-            // Same day schedule (e.g., 9:00 AM to 10:00 PM)
-            currentTimeMillis >= todayStart && currentTimeMillis <= todayEnd
-        } else {
-            // Overnight schedule (e.g., 10:00 PM to 6:00 AM next day)
-            currentTimeMillis >= todayStart || currentTimeMillis <= todayEnd
+            if (todayStart == 0L || todayEnd == 0L) {
+                Log.w(TAG, "Invalid schedule times, allowing access")
+                return true
+            }
+
+            if (todayEnd > todayStart) {
+                // Same day schedule (e.g., 9:00 AM to 10:00 PM)
+                currentTimeMillis >= todayStart && currentTimeMillis <= todayEnd
+            } else {
+                // Overnight schedule (e.g., 10:00 PM to 6:00 AM next day)
+                currentTimeMillis >= todayStart || currentTimeMillis <= todayEnd
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error checking if in schedule, allowing access", e)
+            true // Default to allowing access if there's an error
+        }
+    }
+
+    /**
+     * Validates all current preference values and fixes any invalid ones
+     * This method can be called on app startup to ensure data integrity
+     */
+    fun validateAndFixAllPreferences() {
+        try {
+            Log.d(TAG, "Validating and fixing all preferences")
+
+            // Trigger getters which will validate and fix invalid values
+            swipeLimitCount
+            timeLimitMinutes
+            resetPeriodMinutes
+            scheduleStartTime
+            scheduleEndTime
+            scheduleDays
+            allowedChannels
+
+            Log.d(TAG, "Preference validation completed")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error during preference validation", e)
         }
     }
 }
