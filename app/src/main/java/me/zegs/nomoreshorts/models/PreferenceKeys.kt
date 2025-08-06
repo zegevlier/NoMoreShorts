@@ -14,7 +14,7 @@ object PreferenceKeys {
     const val SCHEDULE_END_TIME = "schedule_end_time"
     const val SCHEDULE_DAYS = "schedule_days"
     const val ALLOWLIST_ENABLED = "allowlist_enabled"
-    const val ALLOWED_CHANNELS = "allowed_channels" // JSON array of channel names
+    const val ALLOWED_CHANNELS = "allowed_channels" // JSON array of channel handles
 }
 
 enum class BlockingMode {

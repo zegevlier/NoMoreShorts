@@ -2,6 +2,8 @@ package me.zegs.nomoreshorts
 
 import android.accessibilityservice.AccessibilityService
 import android.content.SharedPreferences
+import android.os.Handler
+import android.os.Looper
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
@@ -18,14 +20,21 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
         private const val TAG = "ShortsAccessibilityService"
         private const val YOUTUBE_PACKAGE = "com.google.android.youtube"
         private const val BACK_ACTION_COOLDOWN_MS = 100L
+        private const val CACHE_CLEANUP_INTERVAL_MS = 30000L // 30 seconds
     }
 
-    // A string storing the last found shorts content
+    // State management
     private var lastShortWatched: YouTubeShortsInfo? = null
     private var settingsManager: SettingsManager? = null
     private var sessionManager: SessionManager? = null
     private var lastShortsClosedTime: Long = 0
     private var isServiceInitialized: Boolean = false
+
+    // Performance optimization fields
+    private var lastAppEnabledCheck: Long = 0
+    private var cachedAppEnabled: Boolean = false
+    private val handler = Handler(Looper.getMainLooper())
+    private var cacheCleanupRunnable: Runnable? = null
 
     override fun onServiceConnected() {
         try {
@@ -33,6 +42,7 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
             Log.d(TAG, "Accessibility service connected")
 
             initializeService()
+            scheduleCacheCleanup()
         } catch (e: Exception) {
             Log.e(TAG, "Error during service connection", e)
             handleInitializationError(e)
@@ -51,6 +61,7 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
                     sessMgr.onSessionReset = {
                         try {
                             Log.d(TAG, "Session reset")
+                            // Clear cache on session reset
                         } catch (e: Exception) {
                             Log.e(TAG, "Error in session reset callback", e)
                         }
@@ -61,6 +72,8 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
                             // Force close any current shorts and show detailed limit message
                             lastShortWatched?.let { shortsInfo ->
                                 val detailedMessage = sessMgr.getLimitReachedMessage(this@ShortsAccessibilityService)
+                                // We also need to reset the last watched shorts to avoid repeated closures
+                                lastShortWatched = null
                                 closeShorts(shortsInfo, detailedMessage)
                             }
                         } catch (e: Exception) {
@@ -81,6 +94,18 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
         }
     }
 
+    private fun scheduleCacheCleanup() {
+        cacheCleanupRunnable = Runnable {
+            try {
+                // Schedule next cleanup
+                handler.postDelayed(cacheCleanupRunnable!!, CACHE_CLEANUP_INTERVAL_MS)
+            } catch (e: Exception) {
+                Log.e(TAG, "Error during cache cleanup", e)
+            }
+        }
+        handler.postDelayed(cacheCleanupRunnable!!, CACHE_CLEANUP_INTERVAL_MS)
+    }
+
     private fun handleInitializationError(e: Exception) {
         try {
             showToast("Accessibility service failed to initialize. Please restart the app.")
@@ -94,6 +119,9 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
         try {
             super.onDestroy()
             Log.d(TAG, "Accessibility service destroying")
+
+            // Cancel scheduled tasks
+            cacheCleanupRunnable?.let { handler.removeCallbacks(it) }
 
             settingsManager?.let { sm ->
                 try {
@@ -125,8 +153,15 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
                 return
             }
 
-            // React to settings changes and update session scheduling if needed
+            // Invalidate app enabled cache when relevant preferences change
             when (key) {
+                PreferenceKeys.APP_ENABLED,
+                PreferenceKeys.SCHEDULE_ENABLED,
+                PreferenceKeys.SCHEDULE_START_TIME,
+                PreferenceKeys.SCHEDULE_END_TIME,
+                PreferenceKeys.SCHEDULE_DAYS -> {
+                    lastAppEnabledCheck = 0 // Force re-check on next access
+                }
                 PreferenceKeys.RESET_PERIOD_TYPE,
                 PreferenceKeys.RESET_PERIOD_MINUTES,
                 PreferenceKeys.LIMIT_TYPE,
@@ -149,12 +184,24 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
 
     private fun isAppEnabled(): Boolean {
         return try {
+            val currentTime = System.currentTimeMillis()
+
+            // Use cached result if it's recent (within 1 second)
+            if (currentTime - lastAppEnabledCheck < 1000) {
+                return cachedAppEnabled
+            }
+
             val settings = settingsManager
             if (settings == null) {
                 Log.w(TAG, "SettingsManager is null, treating as disabled")
+                cachedAppEnabled = false
+                lastAppEnabledCheck = currentTime
                 return false
             }
-            settings.isAppEnabled && settings.isInSchedule()
+
+            cachedAppEnabled = settings.isAppEnabled && settings.isInSchedule()
+            lastAppEnabledCheck = currentTime
+            cachedAppEnabled
         } catch (e: Exception) {
             Log.e(TAG, "Error checking if app is enabled", e)
             false // Default to disabled on error
@@ -168,7 +215,13 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
                 return
             }
 
-            event?.let { accessibilityEvent ->
+            // Only process YouTube events
+            if (event?.packageName != YOUTUBE_PACKAGE) {
+                Log.v(TAG, "Ignoring event from package: ${event?.packageName}")
+                return
+            }
+
+            event.let { accessibilityEvent ->
                 processAccessibilityEvent(accessibilityEvent)
             }
         } catch (e: Exception) {
@@ -293,7 +346,7 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
             }
 
             sessionManager?.let { sessMgr ->
-                if (sessMgr.isLimitReached()) {
+                if (sessMgr.isLimitReached() && settings.swipeLimitCount != 0) {
                     closeShorts(shortsInfo, getString(R.string.shorts_swipe_limit_reached))
                 }
             }
@@ -433,6 +486,7 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
         }
     }
 
+    // YouTube Shorts extraction functions
     private fun extractShortsInfo(rootNode: AccessibilityNodeInfo): YouTubeShortsInfo? {
         return try {
             // Validate package name first
@@ -488,7 +542,6 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
             if (title.isNotEmpty() && account.isNotEmpty()) {
                 YouTubeShortsInfo(title, account, backButton)
             } else {
-                Log.v(TAG, "Missing title or account: title='$title', account='$account'")
                 null
             }
         } catch (e: Exception) {
@@ -502,7 +555,6 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
             if (index < node.childCount) {
                 node.getChild(index)
             } else {
-                Log.v(TAG, "Child index $index out of bounds (childCount: ${node.childCount})")
                 null
             }
         } catch (e: Exception) {
@@ -539,7 +591,6 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
         return try {
             val frameLayout = safeGetChild(recyclerView, 0)
             if (frameLayout?.className != "android.widget.FrameLayout") {
-                Log.v(TAG, "FrameLayout not found in RecyclerView")
                 return Pair("", "")
             }
 

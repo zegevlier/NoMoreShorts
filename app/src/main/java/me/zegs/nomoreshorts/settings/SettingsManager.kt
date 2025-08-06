@@ -308,7 +308,7 @@ class SettingsManager(context: Context) {
             channels.filter { channel ->
                 val isValid = channel.isNotBlank() && channel.length <= 100 // Reasonable limit
                 if (!isValid) {
-                    Log.w(TAG, "Invalid channel name: '$channel', filtering out")
+                    Log.w(TAG, "Invalid channel handle: '$channel', filtering out")
                 }
                 isValid
             }.distinct() // Remove duplicates

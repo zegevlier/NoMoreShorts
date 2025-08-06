@@ -13,9 +13,9 @@
     <string name="countdown_cancel">Cancel</string>
     <string name="channel_management_title">Manage Channels</string>
     <string name="add_channel">Add Channel</string>
-    <string name="channel_name_hint">Enter channel name</string>
-    <string name="channel_name_empty">Channel name cannot be empty</string>
-    <string name="channel_instructions">Add YouTube channel names to allow them to bypass blocking. Enter the exact channel name as it appears on the short at the bottom of the screen. Short views and swipes are still tracked and counted for allowlisted channels, but while you are watching allowlisted channels you will not be kicked out of shorts.</string>
+    <string name="channel_name_hint">Enter channel handle</string>
+    <string name="channel_name_empty">Channel handle cannot be empty</string>
+    <string name="channel_instructions">Add YouTube channel handles to allow them to bypass blocking. Enter the exact channel handle as it appears on the short at the bottom of the screen. Short views and swipes are still tracked and counted for allowlisted channels, but while you are watching allowlisted channels you will not be kicked out of shorts.</string>
 
     <!-- Permission flow strings -->
     <string name="permission_title">Accessibility Permission Required</string>

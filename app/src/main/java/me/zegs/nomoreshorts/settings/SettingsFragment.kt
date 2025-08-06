@@ -15,11 +15,13 @@ import androidx.preference.ListPreference
 import androidx.preference.Preference
 import androidx.preference.PreferenceFragmentCompat
 import androidx.preference.SwitchPreferenceCompat
+import com.google.android.material.snackbar.Snackbar
 import me.zegs.nomoreshorts.R
 import me.zegs.nomoreshorts.models.BlockingMode
 import me.zegs.nomoreshorts.models.LimitType
 import me.zegs.nomoreshorts.models.PreferenceKeys
 import me.zegs.nomoreshorts.ui.ChannelManagementActivity
+import me.zegs.nomoreshorts.utils.ValidationUtils
 import java.util.Locale
 
 class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedPreferenceChangeListener {
@@ -27,15 +29,11 @@ class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedP
     private var settingsManager: SettingsManager? = null
     private var countdownTimer: CountDownTimer? = null
     private var countdownDialog: AlertDialog? = null
+    private var isCountdownActive = false // Track if countdown is running
+    private var isCompletingCountdown = false // Track if we're in the process of completing countdown
 
     companion object {
         private const val TAG = "SettingsFragment"
-        private const val MAX_SWIPE_LIMIT = 10000
-        private const val MIN_SWIPE_LIMIT = 0
-        private const val MAX_TIME_LIMIT = 1440 // 24 hours in minutes
-        private const val MIN_TIME_LIMIT = 1
-        private const val MAX_RESET_PERIOD = 10080 // 1 week in minutes
-        private const val MIN_RESET_PERIOD = 1
     }
 
     override fun onCreatePreferences(savedInstanceState: Bundle?, rootKey: String?) {
@@ -63,18 +61,18 @@ class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedP
 
     private fun setupPreferences() {
         try {
-            // Setup time picker preferences with error handling
+            // Setup time picker preferences with enhanced error handling
             setupTimePicker(PreferenceKeys.SCHEDULE_START_TIME)
             setupTimePicker(PreferenceKeys.SCHEDULE_END_TIME)
 
-            // Setup channel management with error handling
+            // Setup channel management with loading state
             setupChannelManagement()
 
             // Setup list preference summaries to show selected values
             setupListPreferenceSummaries()
 
             // Setup comprehensive input validation for numeric preferences
-            setupNumericValidation()
+            setupEnhancedNumericValidation()
         } catch (e: Exception) {
             Log.e(TAG, "Error setting up preferences", e)
             showErrorMessage("Failed to initialize settings. Some features may not work correctly.")
@@ -90,29 +88,34 @@ class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedP
 
                 val (hour, minute) = parseTimeString(currentTime)
 
+
                 TimePickerDialog(requireContext(), { _, selectedHour, selectedMinute ->
                     try {
-                        if (isValidTime(selectedHour, selectedMinute)) {
-                            val timeString = String.format(Locale.US, "%02d:%02d", selectedHour, selectedMinute)
-                            settingsManager?.let {
-                                if (key == PreferenceKeys.SCHEDULE_START_TIME) {
-                                    it.scheduleStartTime = timeString
-                                } else {
-                                    it.scheduleEndTime = timeString
-                                }
+                        val timeString = String.format(Locale.US, "%02d:%02d", selectedHour, selectedMinute)
+                        // Save the validated time
+                        settingsManager?.let {
+                            if (key == PreferenceKeys.SCHEDULE_START_TIME) {
+                                it.scheduleStartTime = timeString
+                            } else {
+                                it.scheduleEndTime = timeString
                             }
-                            preference.summary = timeString
-                        } else {
-                            showErrorMessage("Invalid time selected")
                         }
+                        preference.summary = timeString
+
+                        val message = "Time updated successfully"
+                        showSuccessMessage(message)
+
                     } catch (e: Exception) {
                         Log.e(TAG, "Error setting time", e)
-                        showErrorMessage("Failed to set time")
+                        showErrorMessage("Failed to set time: ${e.message}")
+                    } finally {
+
                     }
                 }, hour, minute, true).show()
             } catch (e: Exception) {
                 Log.e(TAG, "Error showing time picker for $key", e)
-                showErrorMessage("Failed to open time picker")
+                showErrorMessage("Failed to open time picker: ${e.message}")
+
             }
             true
         }
@@ -133,19 +136,15 @@ class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedP
             Pair(9, 0) // Default fallback
         }
     }
-
-    private fun isValidTime(hour: Int, minute: Int): Boolean {
-        return hour in 0..23 && minute in 0..59
-    }
-
     private fun setupChannelManagement() {
         findPreference<Preference>("manage_channels")?.setOnPreferenceClickListener {
             try {
                 val intent = Intent(requireContext(), ChannelManagementActivity::class.java)
                 startActivity(intent)
+
             } catch (e: Exception) {
                 Log.e(TAG, "Error opening channel management", e)
-                showErrorMessage("Failed to open channel management")
+                showErrorMessage("Failed to open channel management: ${e.message}")
             }
             true
         }
@@ -168,33 +167,33 @@ class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedP
         }
     }
 
-    private fun setupNumericValidation() {
-        // Enhanced swipe limit validation with comprehensive error handling
+    private fun setupEnhancedNumericValidation() {
+        // Enhanced swipe limit validation using ValidationUtils
         findPreference<EditTextPreference>(PreferenceKeys.SWIPE_LIMIT_COUNT)?.let { pref ->
-            setupEditTextPreference(pref, InputType.TYPE_CLASS_NUMBER) { newValue ->
-                validateSwipeLimit(newValue)
+            setupEditTextPreferenceWithLoading(pref, InputType.TYPE_CLASS_NUMBER) { newValue ->
+                ValidationUtils.validateSwipeLimit(newValue)
             }
         }
 
-        // Enhanced time limit validation
+        // Enhanced time limit validation using ValidationUtils
         findPreference<EditTextPreference>(PreferenceKeys.TIME_LIMIT_MINUTES)?.let { pref ->
-            setupEditTextPreference(pref, InputType.TYPE_CLASS_NUMBER) { newValue ->
-                validateTimeLimit(newValue)
+            setupEditTextPreferenceWithLoading(pref, InputType.TYPE_CLASS_NUMBER) { newValue ->
+                ValidationUtils.validateTimeLimit(newValue)
             }
         }
 
-        // Enhanced reset period minutes validation
+        // Enhanced reset period minutes validation using ValidationUtils
         findPreference<EditTextPreference>(PreferenceKeys.RESET_PERIOD_MINUTES)?.let { pref ->
-            setupEditTextPreference(pref, InputType.TYPE_CLASS_NUMBER) { newValue ->
-                validateResetPeriod(newValue)
+            setupEditTextPreferenceWithLoading(pref, InputType.TYPE_CLASS_NUMBER) { newValue ->
+                ValidationUtils.validateResetPeriod(newValue)
             }
         }
     }
 
-    private fun setupEditTextPreference(
+    private fun setupEditTextPreferenceWithLoading(
         preference: EditTextPreference,
         inputType: Int,
-        validator: (String) -> ValidationResult
+        validator: (String) -> ValidationUtils.ValidationResult
     ) {
         // Set input type and filters
         preference.setOnBindEditTextListener { editText ->
@@ -204,8 +203,16 @@ class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedP
 
         preference.setOnPreferenceChangeListener { _, newValue ->
             try {
-                val result = validator(newValue.toString())
+                val sanitizedValue = ValidationUtils.sanitizeInput(newValue.toString())
+                val result = validator(sanitizedValue)
+
+
                 if (result.isValid) {
+                    var message = "Setting updated successfully"
+                    if (result.warningMessage.isNotEmpty()) {
+                        message += "\nNote: ${result.warningMessage}"
+                    }
+                    showSuccessMessage(message)
                     true
                 } else {
                     showErrorMessage(result.errorMessage)
@@ -213,51 +220,20 @@ class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedP
                 }
             } catch (e: Exception) {
                 Log.e(TAG, "Error validating preference", e)
-                showErrorMessage("Invalid input format")
+
+                showErrorMessage("Invalid input format: ${e.message}")
                 false
             }
         }
-    }
 
-    private fun validateSwipeLimit(value: String): ValidationResult {
-        if (value.isBlank()) {
-            return ValidationResult(false, "Swipe limit cannot be empty")
-        }
-
-        val count = value.toIntOrNull()
-        return when {
-            count == null -> ValidationResult(false, "Please enter a valid number")
-            count < MIN_SWIPE_LIMIT -> ValidationResult(false, "Swipe limit cannot be negative")
-            count > MAX_SWIPE_LIMIT -> ValidationResult(false, "Swipe limit cannot exceed $MAX_SWIPE_LIMIT")
-            else -> ValidationResult(true, "")
-        }
-    }
-
-    private fun validateTimeLimit(value: String): ValidationResult {
-        if (value.isBlank()) {
-            return ValidationResult(false, "Time limit cannot be empty")
-        }
-
-        val minutes = value.toIntOrNull()
-        return when {
-            minutes == null -> ValidationResult(false, "Please enter a valid number")
-            minutes < MIN_TIME_LIMIT -> ValidationResult(false, "Time limit must be at least $MIN_TIME_LIMIT minute")
-            minutes > MAX_TIME_LIMIT -> ValidationResult(false, "Time limit cannot exceed $MAX_TIME_LIMIT minutes (24 hours)")
-            else -> ValidationResult(true, "")
-        }
-    }
-
-    private fun validateResetPeriod(value: String): ValidationResult {
-        if (value.isBlank()) {
-            return ValidationResult(false, "Reset period cannot be empty")
-        }
-
-        val minutes = value.toIntOrNull()
-        return when {
-            minutes == null -> ValidationResult(false, "Please enter a valid number")
-            minutes < MIN_RESET_PERIOD -> ValidationResult(false, "Reset period must be at least $MIN_RESET_PERIOD minute")
-            minutes > MAX_RESET_PERIOD -> ValidationResult(false, "Reset period cannot exceed $MAX_RESET_PERIOD minutes (1 week)")
-            else -> ValidationResult(true, "")
+        // Update summary to show current value without emoji indicators
+        preference.summaryProvider = Preference.SummaryProvider<EditTextPreference> { pref ->
+            val value = pref.text
+            if (value.isNullOrBlank()) {
+                "Not set"
+            } else {
+                value
+            }
         }
     }
 
@@ -266,11 +242,22 @@ class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedP
             when (key) {
                 PreferenceKeys.APP_ENABLED -> {
                     val isEnabled = sharedPreferences?.getBoolean(key, false) ?: false
-                    if (!isEnabled) {
+                    // Only start countdown if:
+                    // 1. App is being disabled (!isEnabled)
+                    // 2. No countdown is currently active (!isCountdownActive)
+                    // 3. We're not in the process of completing a countdown (!isCompletingCountdown)
+                    if (!isEnabled && !isCountdownActive && !isCompletingCountdown) {
+                        // Prevent the switch from changing - revert it back to enabled
+                        isCountdownActive = true
+                        settingsManager?.isAppEnabled = true
+                        findPreference<SwitchPreferenceCompat>(PreferenceKeys.APP_ENABLED)?.isChecked = true
+
+                        // Start countdown without changing any stored settings
                         startCountdown()
                     }
                     updatePreferenceDependencies()
                 }
+
                 PreferenceKeys.BLOCKING_MODE,
                 PreferenceKeys.LIMIT_TYPE,
                 PreferenceKeys.SCHEDULE_ENABLED,
@@ -328,16 +315,21 @@ class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedP
             // Create the dialog first
             countdownDialog = AlertDialog.Builder(requireContext())
                 .setTitle(getString(R.string.countdown_title))
-                .setMessage(resources.getQuantityString(R.plurals.countdown_message, remainingSeconds, remainingSeconds))
+                .setMessage(
+                    resources.getQuantityString(
+                        R.plurals.countdown_message,
+                        remainingSeconds,
+                        remainingSeconds
+                    )
+                )
                 .setCancelable(false)
                 .setNegativeButton(getString(R.string.countdown_cancel)) { _, _ ->
                     try {
                         cancelCountdown()
-                        // Re-enable the app
-                        settingsManager?.isAppEnabled = true
-                        findPreference<SwitchPreferenceCompat>(PreferenceKeys.APP_ENABLED)?.isChecked = true
+                        // Keep the app enabled - no changes needed since we never changed the setting
+                        isCountdownActive = false
                     } catch (e: Exception) {
-                        Log.e(TAG, "Error re-enabling app from countdown", e)
+                        Log.e(TAG, "Error canceling countdown", e)
                     }
                 }
                 .create()
@@ -348,7 +340,13 @@ class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedP
                 override fun onTick(millisUntilFinished: Long) {
                     try {
                         remainingSeconds = (millisUntilFinished / 1000).toInt() + 1
-                        countdownDialog?.setMessage(resources.getQuantityString(R.plurals.countdown_message, remainingSeconds, remainingSeconds))
+                        countdownDialog?.setMessage(
+                            resources.getQuantityString(
+                                R.plurals.countdown_message,
+                                remainingSeconds,
+                                remainingSeconds
+                            )
+                        )
                     } catch (e: Exception) {
                         Log.e(TAG, "Error updating countdown timer", e)
                     }
@@ -358,10 +356,30 @@ class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedP
                     try {
                         countdownDialog?.dismiss()
                         countdownDialog = null
-                        // App will remain disabled as set by the preference change
-                        Toast.makeText(requireContext(), getString(R.string.youtube_shorts_blocker_disabled), Toast.LENGTH_SHORT).show()
+                        isCountdownActive = false
+
+                        // Only disable if we're still in the foreground (dialog was visible)
+                        if (activity != null && !requireActivity().isFinishing && isAdded) {
+                            // Set flag to prevent recursive countdown when we disable the app
+                            isCompletingCountdown = true
+
+                            // Now actually disable the app after countdown completes
+                            settingsManager?.isAppEnabled = false
+                            findPreference<SwitchPreferenceCompat>(PreferenceKeys.APP_ENABLED)?.isChecked = false
+                            showSuccessMessage(getString(R.string.youtube_shorts_blocker_disabled))
+
+                            // Reset the flag after a short delay to allow the preference change to process
+                            android.os.Handler(android.os.Looper.getMainLooper()).postDelayed({
+                                isCompletingCountdown = false
+                            }, 100)
+                        } else {
+                            // User left the app during countdown - keep it enabled
+                            Log.d(TAG, "User left app during countdown - keeping app enabled")
+                        }
                     } catch (e: Exception) {
                         Log.e(TAG, "Error finishing countdown", e)
+                        isCountdownActive = false
+                        isCompletingCountdown = false
                     }
                 }
             }
@@ -369,27 +387,48 @@ class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedP
         } catch (e: Exception) {
             Log.e(TAG, "Error starting countdown", e)
             showErrorMessage("Failed to start countdown")
+            isCountdownActive = false
         }
     }
 
     private fun cancelCountdown() {
         try {
+            isCountdownActive = false
             countdownTimer?.cancel()
             countdownTimer = null
             countdownDialog?.dismiss()
             countdownDialog = null
         } catch (e: Exception) {
             Log.e(TAG, "Error canceling countdown", e)
+            isCountdownActive = false
         }
     }
 
     private fun showErrorMessage(message: String) {
         try {
-            Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show()
+            view?.let {
+                Snackbar.make(it, message, Snackbar.LENGTH_LONG)
+                    .setBackgroundTint(resources.getColor(android.R.color.holo_red_light, null))
+                    .show()
+            } ?: run {
+                Toast.makeText(requireContext(), message, Toast.LENGTH_LONG).show()
+            }
         } catch (e: Exception) {
             Log.e(TAG, "Error showing error message: $message", e)
         }
     }
 
-    private data class ValidationResult(val isValid: Boolean, val errorMessage: String)
+    private fun showSuccessMessage(message: String) {
+        try {
+            view?.let {
+                Snackbar.make(it, message, Snackbar.LENGTH_SHORT)
+                    .setBackgroundTint(resources.getColor(android.R.color.holo_green_light, null))
+                    .show()
+            } ?: run {
+                Toast.makeText(requireContext(), message, Toast.LENGTH_SHORT).show()
+            }
+        } catch (e: Exception) {
+            Log.e(TAG, "Error showing success message: $message", e)
+        }
+    }
 }

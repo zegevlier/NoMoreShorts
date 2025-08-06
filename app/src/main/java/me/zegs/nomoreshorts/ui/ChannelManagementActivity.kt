@@ -1,14 +1,20 @@
 package me.zegs.nomoreshorts.ui
 
 import android.os.Bundle
+import android.text.Editable
+import android.text.TextWatcher
+import android.view.View
 import android.widget.Button
 import android.widget.EditText
 import android.widget.Toast
 import androidx.appcompat.app.AppCompatActivity
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.RecyclerView
+import com.google.android.material.snackbar.Snackbar
+import com.google.android.material.textfield.TextInputLayout
 import me.zegs.nomoreshorts.R
 import me.zegs.nomoreshorts.settings.SettingsManager
+import me.zegs.nomoreshorts.utils.ValidationUtils
 
 class ChannelManagementActivity : AppCompatActivity() {
 
@@ -17,6 +23,7 @@ class ChannelManagementActivity : AppCompatActivity() {
     private lateinit var recyclerView: RecyclerView
     private lateinit var editTextChannel: EditText
     private lateinit var buttonAdd: Button
+    private lateinit var textInputLayout: TextInputLayout
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -27,6 +34,7 @@ class ChannelManagementActivity : AppCompatActivity() {
         setupViews()
         setupRecyclerView()
         setupAddButton()
+        setupInputValidation()
 
         supportActionBar?.title = getString(R.string.channel_management_title)
         supportActionBar?.setDisplayHomeAsUpEnabled(true)
@@ -36,20 +44,26 @@ class ChannelManagementActivity : AppCompatActivity() {
         recyclerView = findViewById(R.id.recyclerViewChannels)
         editTextChannel = findViewById(R.id.editTextChannel)
         buttonAdd = findViewById(R.id.buttonAddChannel)
+        textInputLayout = findViewById(R.id.textInputLayoutChannel)
 
-        editTextChannel.hint = getString(R.string.channel_name_hint)
+        // Initially disable the add button until valid input
+        buttonAdd.isEnabled = false
     }
 
     private fun setupRecyclerView() {
-        channelAdapter = ChannelAdapter(
-            channels = settingsManager.allowedChannels.toMutableList(),
-            onDeleteChannel = { channel ->
-                removeChannel(channel)
-            }
-        )
+        try {
+            channelAdapter = ChannelAdapter(
+                channels = settingsManager.allowedChannels.toMutableList(),
+                onDeleteChannel = { channel ->
+                    removeChannelWithConfirmation(channel)
+                }
+            )
 
-        recyclerView.layoutManager = LinearLayoutManager(this)
-        recyclerView.adapter = channelAdapter
+            recyclerView.layoutManager = LinearLayoutManager(this)
+            recyclerView.adapter = channelAdapter
+        } catch (e: Exception) {
+            showError("Failed to load channels: ${e.message}")
+        }
     }
 
     private fun setupAddButton() {
@@ -59,38 +73,132 @@ class ChannelManagementActivity : AppCompatActivity() {
         }
     }
 
+    private fun setupInputValidation() {
+        editTextChannel.addTextChangedListener(object : TextWatcher {
+            override fun beforeTextChanged(s: CharSequence?, start: Int, count: Int, after: Int) {}
+
+            override fun onTextChanged(s: CharSequence?, start: Int, before: Int, count: Int) {}
+
+            override fun afterTextChanged(s: Editable?) {
+                validateChannelNameInput(s?.toString() ?: "")
+            }
+        })
+    }
+
+    private fun validateChannelNameInput(channelName: String): Boolean {
+        val sanitizedInput = ValidationUtils.sanitizeInput(channelName)
+        val result = ValidationUtils.validateChannelName(sanitizedInput, settingsManager.allowedChannels)
+
+        // Clear previous errors
+        textInputLayout.error = null
+        textInputLayout.helperText = null
+
+        when {
+            result.isValid -> {
+                textInputLayout.error = null
+                if (result.warningMessage.isNotEmpty()) {
+                    textInputLayout.helperText = "⚠ ${result.warningMessage}"
+                } else {
+                    textInputLayout.helperText = "Enter YouTube channel handle"
+                }
+                buttonAdd.isEnabled = true
+                return true
+            }
+
+            sanitizedInput.isEmpty() -> {
+                buttonAdd.isEnabled = false
+                textInputLayout.helperText = "Enter YouTube channel handle"
+                return false
+            }
+
+            else -> {
+                textInputLayout.error = result.errorMessage
+                buttonAdd.isEnabled = false
+                return false
+            }
+        }
+    }
+
     private fun addChannel() {
-        val channelName = editTextChannel.text.toString().trim()
 
-        if (channelName.isEmpty()) {
-            Toast.makeText(this, getString(R.string.channel_name_empty), Toast.LENGTH_SHORT).show()
+        val channelName = ValidationUtils.sanitizeInput(editTextChannel.text.toString())
+        val result = ValidationUtils.validateChannelName(channelName, settingsManager.allowedChannels)
+        if (!result.isValid) {
+            showError(result.errorMessage)
             return
         }
 
-        val currentChannels = settingsManager.allowedChannels.toMutableList()
+        buttonAdd.isEnabled = false
 
-        if (currentChannels.contains(channelName)) {
-            Toast.makeText(this, getString(R.string.channel_already_exists), Toast.LENGTH_SHORT).show()
-            return
+        try {
+            val currentChannels = settingsManager.allowedChannels.toMutableList()
+            currentChannels.add(channelName)
+            settingsManager.allowedChannels = currentChannels
+
+            channelAdapter.addChannel(channelName)
+            editTextChannel.text.clear()
+
+            var message = "Channel '$channelName' added successfully"
+            if (result.warningMessage.isNotEmpty()) {
+                message += "\n${result.warningMessage}"
+            }
+            showSuccess(message)
+
+        } catch (e: Exception) {
+            showError("Failed to add channel: ${e.message}")
         }
+    }
 
-        currentChannels.add(channelName)
-        settingsManager.allowedChannels = currentChannels
-
-        channelAdapter.addChannel(channelName)
-        editTextChannel.text.clear()
-
-        Toast.makeText(this, getString(R.string.channel_added), Toast.LENGTH_SHORT).show()
+    private fun removeChannelWithConfirmation(channel: String) {
+        androidx.appcompat.app.AlertDialog.Builder(this)
+            .setTitle("Remove Channel")
+            .setMessage("Are you sure you want to remove '$channel' from your allowed channels list?")
+            .setPositiveButton("Remove") { _, _ ->
+                removeChannel(channel)
+            }
+            .setNegativeButton("Cancel", null)
+            .show()
     }
 
     private fun removeChannel(channel: String) {
-        val currentChannels = settingsManager.allowedChannels.toMutableList()
-        currentChannels.remove(channel)
-        settingsManager.allowedChannels = currentChannels
+        try {
+            val currentChannels = settingsManager.allowedChannels.toMutableList()
+            if (currentChannels.remove(channel)) {
+                settingsManager.allowedChannels = currentChannels
+                channelAdapter.removeChannel(channel)
+                showSuccess("Channel '$channel' removed successfully")
+            } else {
+                showError("Channel not found in list")
+            }
 
-        channelAdapter.removeChannel(channel)
+            // Re-validate current input in case removing a channel makes it valid again
+            validateChannelNameInput(editTextChannel.text.toString())
 
-        Toast.makeText(this, getString(R.string.channel_removed), Toast.LENGTH_SHORT).show()
+        } catch (e: Exception) {
+            showError("Failed to remove channel: ${e.message}")
+        }
+    }
+
+    private fun showError(message: String) {
+        try {
+            val rootView = findViewById<View>(android.R.id.content)
+            Snackbar.make(rootView, message, Snackbar.LENGTH_LONG)
+                .setBackgroundTint(getColor(android.R.color.holo_red_light))
+                .show()
+        } catch (e: Exception) {
+            Toast.makeText(this, message, Toast.LENGTH_LONG).show()
+        }
+    }
+
+    private fun showSuccess(message: String) {
+        try {
+            val rootView = findViewById<View>(android.R.id.content)
+            Snackbar.make(rootView, message, Snackbar.LENGTH_SHORT)
+                .setBackgroundTint(getColor(android.R.color.holo_green_light))
+                .show()
+        } catch (e: Exception) {
+            Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
+        }
     }
 
     override fun onSupportNavigateUp(): Boolean {

@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:orientation="vertical"
@@ -19,22 +20,38 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="horizontal"
-        android:layout_marginBottom="16dp">
+        android:layout_marginBottom="16dp"
+        android:gravity="center_vertical">
 
-        <EditText
-            android:id="@+id/editTextChannel"
+        <com.google.android.material.textfield.TextInputLayout
+            android:id="@+id/textInputLayoutChannel"
             android:layout_width="0dp"
             android:layout_height="wrap_content"
             android:layout_marginEnd="8dp"
             android:layout_weight="1"
-            android:autofillHints="username" android:hint="@string/add_channel"
-            android:inputType="text" android:maxLines="1"/>
+            app:errorEnabled="true"
+            app:errorTextAppearance="@style/TextAppearance.MaterialComponents.Caption"
+            style="@style/Widget.MaterialComponents.TextInputLayout.OutlinedBox">
+
+            <com.google.android.material.textfield.TextInputEditText
+                android:id="@+id/editTextChannel"
+                android:layout_width="match_parent"
+                android:layout_height="wrap_content"
+                android:autofillHints="username"
+                android:hint="Enter channel handle"
+                android:inputType="text"
+                android:maxLines="1"
+                android:maxLength="50" />
+
+        </com.google.android.material.textfield.TextInputLayout>
 
         <Button
             android:id="@+id/buttonAddChannel"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="@string/add_channel" />
+            android:text="Add"
+            android:minWidth="72dp"
+            style="@style/Widget.MaterialComponents.Button" />
 
     </LinearLayout>
 
@@ -42,6 +59,7 @@
         android:id="@+id/recyclerViewChannels"
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1" />
+        android:layout_weight="1"
+        android:scrollbars="vertical" />
 
 </LinearLayout>
