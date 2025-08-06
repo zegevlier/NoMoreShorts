@@ -185,7 +185,7 @@ class ChannelManagementActivity : AppCompatActivity() {
             Snackbar.make(rootView, message, Snackbar.LENGTH_LONG)
                 .setBackgroundTint(getColor(android.R.color.holo_red_light))
                 .show()
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             Toast.makeText(this, message, Toast.LENGTH_LONG).show()
         }
     }
@@ -196,7 +196,7 @@ class ChannelManagementActivity : AppCompatActivity() {
             Snackbar.make(rootView, message, Snackbar.LENGTH_SHORT)
                 .setBackgroundTint(getColor(android.R.color.holo_green_light))
                 .show()
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             Toast.makeText(this, message, Toast.LENGTH_SHORT).show()
         }
     }

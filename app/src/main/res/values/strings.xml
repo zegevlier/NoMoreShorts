@@ -12,9 +12,8 @@
     </plurals>
     <string name="countdown_cancel">Cancel</string>
     <string name="channel_management_title">Manage Channels</string>
-    <string name="add_channel">Add Channel</string>
+    <string name="add_channel">Add</string>
     <string name="channel_name_hint">Enter channel handle</string>
-    <string name="channel_name_empty">Channel handle cannot be empty</string>
     <string name="channel_instructions">Add YouTube channel handles to allow them to bypass blocking. Enter the exact channel handle as it appears on the short at the bottom of the screen. Short views and swipes are still tracked and counted for allowlisted channels, but while you are watching allowlisted channels you will not be kicked out of shorts.</string>
 
     <!-- Permission flow strings -->
@@ -22,9 +21,6 @@
     <string name="permission_description">No More Shorts needs special accessibility permissions to help you control your YouTube Shorts usage.\n\n• We monitor your screen to detect when you\'re watching YouTube Shorts\n• We automatically close Shorts when you\'ve reached your set limits\n• We can press the back button for you to exit Shorts\n\nYour privacy is protected:\n• No data leaves your device\n• We only look at YouTube\'s interface, not your personal content\n• Only your app settings are saved on your device\n\nHow to enable:\n1. Click the button below to open accessibility settings\n2. Navigate to "Downloaded apps" or "Installed apps"\n3. Find and tap "NoMoreShorts"\n4. Toggle the switch to enable it\n\nWithout these permissions, the app cannot function.</string>
     <string name="grant_permission">Open Accessibility Settings</string>
 
-    <string name="permission_denied_title">Permission Required</string>
-    <string name="permission_denied_description">No More Shorts cannot function without accessibility permissions. These permissions allow us to detect YouTube Shorts and help you stick to your usage limits.\n\nPlease grant the permission to continue using the app.</string>
-    <string name="try_again">Grant Permission</string>
     <string name="app_icon_label">App Icon</string>
 
     <!-- Blocking mode options -->
@@ -82,28 +78,10 @@
     </string-array>
 
     <!-- Enhanced validation messages -->
-    <string name="swipe_limit_validation">Swipe limit must be between 0 and 10,000</string>
-    <string name="time_limit_validation">Time limit must be between 1 and 1,440 minutes (24 hours)</string>
-    <string name="reset_period_validation">Reset period must be between 1 and 10,080 minutes (1 week)</string>
 
     <!-- Additional validation messages for enhanced error handling -->
-    <string name="input_empty_error">This field cannot be empty</string>
-    <string name="input_invalid_number">Please enter a valid number</string>
-    <string name="input_negative_error">Value cannot be negative</string>
-    <string name="input_too_large_error">Value is too large</string>
-    <string name="settings_load_error">Failed to load settings. Please restart the app.</string>
-    <string name="settings_save_error">Failed to save settings. Please try again.</string>
-    <string name="time_picker_error">Failed to open time picker</string>
-    <string name="time_set_error">Failed to set time</string>
-    <string name="invalid_time_error">Invalid time selected</string>
-    <string name="channel_management_error">Failed to open channel management</string>
-    <string name="countdown_error">Failed to start countdown</string>
-    <string name="preferences_init_error">Failed to initialize settings. Some features may not work correctly.</string>
 
     <!-- Channel management messages -->
-    <string name="channel_already_exists">Channel already in allowlist</string>
-    <string name="channel_added">Channel added to allowlist</string>
-    <string name="channel_removed">Channel removed from allowlist</string>
 
     <!-- Accessibility service messages -->
     <string name="youtube_shorts_blocker_disabled">YouTube Shorts Blocker disabled</string>
@@ -118,8 +96,7 @@
     <string name="time_limit_reached">Time limit reached (%1$d/%2$d minutes)</string>
 
     <!-- Preference keys for manage_channels (if needed in code) -->
-    <string name="manage_channels_key">manage_channels</string>
-    <string name="swipe_limiting_category_key">swipe_limiting_category</string>
     <string name="shorts_swipe_limit_reached">Swipe limit reached</string>
+    <string name="delete_channel">Delete channel</string>
 
 </resources>

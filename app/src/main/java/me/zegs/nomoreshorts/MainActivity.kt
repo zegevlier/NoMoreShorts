@@ -128,7 +128,7 @@ class MainActivity : AppCompatActivity() {
             } else {
                 Toast.makeText(this, message, Toast.LENGTH_LONG).show()
             }
-        } catch (e: Exception) {
+        } catch (_: Exception) {
             // Fallback to Toast if Snackbar fails
             Toast.makeText(this, message, Toast.LENGTH_LONG).show()
         }

@@ -12,6 +12,7 @@ import me.zegs.nomoreshorts.models.PreferenceKeys
 import me.zegs.nomoreshorts.models.ResetPeriodType
 import androidx.core.content.edit
 import java.util.Calendar
+import java.util.Locale
 
 class SettingsManager(context: Context) {
     private val prefs: SharedPreferences = PreferenceManager.getDefaultSharedPreferences(context)
@@ -265,7 +266,7 @@ class SettingsManager(context: Context) {
                 val minute = parts[1].toIntOrNull()?.coerceIn(0, 59)
 
                 if (hour != null && minute != null) {
-                    String.format("%02d:%02d", hour, minute)
+                    String.format(Locale.US, "%02d:%02d", hour, minute)
                 } else {
                     Log.w(TAG, "Invalid time format: $timeString, using default")
                     DEFAULT_START_TIME
@@ -291,11 +292,9 @@ class SettingsManager(context: Context) {
                 isValid
             }.map { it.lowercase() }.toSet()
 
-            if (filteredDays.isEmpty()) {
+            filteredDays.ifEmpty {
                 Log.w(TAG, "No valid days provided, using all days")
                 getDefaultDays()
-            } else {
-                filteredDays
             }
         } catch (e: Exception) {
             Log.e(TAG, "Error validating days set, using defaults", e)
@@ -445,29 +444,6 @@ class SettingsManager(context: Context) {
         } catch (e: Exception) {
             Log.e(TAG, "Error checking if in schedule, allowing access", e)
             true // Default to allowing access if there's an error
-        }
-    }
-
-    /**
-     * Validates all current preference values and fixes any invalid ones
-     * This method can be called on app startup to ensure data integrity
-     */
-    fun validateAndFixAllPreferences() {
-        try {
-            Log.d(TAG, "Validating and fixing all preferences")
-
-            // Trigger getters which will validate and fix invalid values
-            swipeLimitCount
-            timeLimitMinutes
-            resetPeriodMinutes
-            scheduleStartTime
-            scheduleEndTime
-            scheduleDays
-            allowedChannels
-
-            Log.d(TAG, "Preference validation completed")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error during preference validation", e)
         }
     }
 }

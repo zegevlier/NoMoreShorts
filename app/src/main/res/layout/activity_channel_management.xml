@@ -38,20 +38,20 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:autofillHints="username"
-                android:hint="Enter channel handle"
+                android:hint="@string/channel_name_hint"
                 android:inputType="text"
-                android:maxLines="1"
-                android:maxLength="50" />
+                android:maxLength="50"
+                android:maxLines="1"/>
 
         </com.google.android.material.textfield.TextInputLayout>
 
         <Button
             android:id="@+id/buttonAddChannel"
+            style="@style/Widget.MaterialComponents.Button"
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
-            android:text="Add"
             android:minWidth="72dp"
-            style="@style/Widget.MaterialComponents.Button" />
+            android:text="@string/add_channel"/>
 
     </LinearLayout>
 

@@ -42,7 +42,7 @@ class PermissionRequestActivity : AppCompatActivity() {
             override fun handleOnBackPressed() {
                 // User pressed back - just stay on this screen since we need the permission
                 // They can use the system back button to exit the app if they want
-                // Do nothing to prevent going back
+                // We do nothing to prevent going back
             }
         })
     }

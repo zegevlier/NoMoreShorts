@@ -45,7 +45,7 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
             scheduleCacheCleanup()
         } catch (e: Exception) {
             Log.e(TAG, "Error during service connection", e)
-            handleInitializationError(e)
+            handleInitializationError()
         }
     }
 
@@ -90,7 +90,7 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
 
         } catch (e: Exception) {
             Log.e(TAG, "Failed to initialize service", e)
-            handleInitializationError(e)
+            handleInitializationError()
         }
     }
 
@@ -106,7 +106,7 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
         handler.postDelayed(cacheCleanupRunnable!!, CACHE_CLEANUP_INTERVAL_MS)
     }
 
-    private fun handleInitializationError(e: Exception) {
+    private fun handleInitializationError() {
         try {
             showToast("Accessibility service failed to initialize. Please restart the app.")
             isServiceInitialized = false
@@ -221,9 +221,7 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
                 return
             }
 
-            event.let { accessibilityEvent ->
-                processAccessibilityEvent(accessibilityEvent)
-            }
+            processAccessibilityEvent(event)
         } catch (e: Exception) {
             Log.e(TAG, "Error processing accessibility event", e)
         }

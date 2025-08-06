@@ -25,7 +25,7 @@
             android:defaultValue="true"
             android:dependency="app_enabled"
             android:key="block_shorts_feed"
-            android:summary="Completely block access to the shorts feed, while still (potentialy, depending on the other settings) allowing entering shorts through recommendations and notifications."
+            android:summary="Completely block access to the shorts feed, while still (potentially, depending on the other settings) allowing entering shorts through recommendations and notifications."
             android:title="Block Shorts Feed"/>
 
         <ListPreference
