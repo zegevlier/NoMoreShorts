@@ -162,6 +162,7 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
                 PreferenceKeys.SCHEDULE_DAYS -> {
                     lastAppEnabledCheck = 0 // Force re-check on next access
                 }
+
                 PreferenceKeys.RESET_PERIOD_TYPE,
                 PreferenceKeys.RESET_PERIOD_MINUTES,
                 PreferenceKeys.LIMIT_TYPE,
@@ -233,9 +234,11 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
                 AccessibilityEvent.TYPE_WINDOW_CONTENT_CHANGED -> {
                     handleWindowContentChanged()
                 }
+
                 AccessibilityEvent.TYPE_WINDOW_STATE_CHANGED -> {
                     handleWindowStateChanged()
                 }
+
                 else -> {
                     // Log other event types for debugging if needed
                     Log.v(TAG, "Unhandled event type: ${event.eventType}")
@@ -250,7 +253,6 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
         try {
             val rootNode = rootInActiveWindow
             if (rootNode == null) {
-                Log.v(TAG, "Root node is null, skipping content change")
                 return
             }
 
@@ -264,14 +266,10 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
     }
 
     private fun handleWindowStateChanged() {
-        try {
-            // This event is triggered when the active window changes
-            // We can reset the last watched shorts content here
-            lastShortWatched = null
-            Log.v(TAG, "Window state changed, reset last watched short")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error handling window state changed", e)
-        }
+        // This event is triggered when the active window changes
+        // We can reset the last watched shorts content here
+        lastShortWatched = null
+        Log.v(TAG, "Window state changed, reset last watched short")
     }
 
     private fun processShortsInfo(shortsInfo: YouTubeShortsInfo) {
@@ -317,11 +315,13 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
                 shortsInfo.backButton == null && settings.blockShortsFeed -> {
                     closeShorts(shortsInfo, getString(R.string.shorts_feed_blocked))
                 }
+
                 settings.blockingMode == BlockingMode.ALL_SHORTS -> {
                     closeShorts(shortsInfo, getString(R.string.all_shorts_blocked))
                 }
+
                 settings.blockingMode == BlockingMode.ONLY_SWIPING &&
-                settings.limitType == LimitType.SWIPE_COUNT -> {
+                        settings.limitType == LimitType.SWIPE_COUNT -> {
                     handleSwipeLimitOnEntry(shortsInfo, settings)
                 }
             }
@@ -366,6 +366,7 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
                 BlockingMode.ALL_SHORTS -> {
                     closeShorts(shortsInfo, getString(R.string.all_shorts_blocked))
                 }
+
                 BlockingMode.ONLY_SWIPING -> {
                     sessionManager?.let { sessMgr ->
                         try {
@@ -409,9 +410,11 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
 
             // Fallback to global back action if needed
             if (!shortsClosed) {
+                Log.d(TAG, "Back button action failed, performing global back action")
                 performGlobalBackAction(currentTime)
             }
 
+            lastShortWatched = null // Reset last watched shorts
             lastShortsClosedTime = currentTime
         } catch (e: Exception) {
             Log.e(TAG, "Error closing shorts", e)
@@ -504,31 +507,26 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
         return try {
             // Validate root structure
             if (rootNode.className != "android.widget.FrameLayout") {
-                Log.v(TAG, "Root is not FrameLayout: ${rootNode.className}")
                 return null
             }
 
             val drawerLayout = safeGetChild(rootNode, 0) ?: return null
             if (drawerLayout.className != "androidx.drawerlayout.widget.DrawerLayout") {
-                Log.v(TAG, "DrawerLayout not found: ${drawerLayout.className}")
                 return null
             }
 
             val secondFrameLayout = safeGetChild(drawerLayout, 0) ?: return null
             if (secondFrameLayout.className != "android.widget.FrameLayout") {
-                Log.v(TAG, "Second FrameLayout not found: ${secondFrameLayout.className}")
                 return null
             }
 
             val thirdFrameLayout = safeGetChild(secondFrameLayout, 0) ?: return null
             if (thirdFrameLayout.className != "android.widget.FrameLayout") {
-                Log.v(TAG, "Third FrameLayout not found: ${thirdFrameLayout.className}")
                 return null
             }
 
             val scrollView = safeGetChild(thirdFrameLayout, 0) ?: return null
             if (scrollView.className != "android.widget.ScrollView") {
-                Log.v(TAG, "ScrollView not found: ${scrollView.className}")
                 return null
             }
 
@@ -582,7 +580,6 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
 
     private fun extractTitleAndAccount(recyclerView: AccessibilityNodeInfo?): Pair<String, String> {
         if (recyclerView == null) {
-            Log.v(TAG, "RecyclerView is null")
             return Pair("", "")
         }
 
