@@ -13,13 +13,6 @@
         android:paddingHorizontal="16dp"
         android:paddingVertical="24dp">
 
-        <ImageView
-            android:layout_width="120dp"
-            android:layout_height="120dp"
-            android:layout_marginBottom="32dp"
-            android:contentDescription="@string/app_icon_label"
-            android:src="@mipmap/ic_launcher"/>
-
         <TextView
             android:id="@+id/titleText"
             android:layout_width="match_parent"

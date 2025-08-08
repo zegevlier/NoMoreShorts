@@ -19,7 +19,9 @@ import com.google.android.material.snackbar.Snackbar
 import me.zegs.nomoreshorts.R
 import me.zegs.nomoreshorts.models.BlockingMode
 import me.zegs.nomoreshorts.models.LimitType
+import me.zegs.nomoreshorts.PersistenceService
 import me.zegs.nomoreshorts.models.PreferenceKeys
+import me.zegs.nomoreshorts.models.ResetPeriodType
 import me.zegs.nomoreshorts.ui.ChannelManagementActivity
 import me.zegs.nomoreshorts.utils.ValidationUtils
 import java.util.Locale
@@ -242,11 +244,17 @@ class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedP
             when (key) {
                 PreferenceKeys.APP_ENABLED -> {
                     val isEnabled = sharedPreferences?.getBoolean(key, false) ?: false
-                    // Only start countdown if:
-                    // 1. App is being disabled (!isEnabled)
-                    // 2. No countdown is currently active (!isCountdownActive)
-                    // 3. We're not in the process of completing a countdown (!isCompletingCountdown)
-                    if (!isEnabled && !isCountdownActive && !isCompletingCountdown) {
+
+                    if (isEnabled && !isCountdownActive && !isCompletingCountdown) {
+                        // App is being enabled - start the persistence service
+                        Log.d(TAG, "App enabled, starting persistence service")
+                        PersistenceService.start(requireContext())
+                    } else if (!isEnabled && !isCountdownActive && !isCompletingCountdown) {
+                        // Only start countdown if:
+                        // 1. App is being disabled (!isEnabled)
+                        // 2. No countdown is currently active (!isCountdownActive)
+                        // 3. We're not in the process of completing a countdown (!isCompletingCountdown)
+
                         // Prevent the switch from changing - revert it back to enabled
                         isCountdownActive = true
                         settingsManager?.isAppEnabled = true
@@ -260,6 +268,7 @@ class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedP
 
                 PreferenceKeys.BLOCKING_MODE,
                 PreferenceKeys.LIMIT_TYPE,
+                PreferenceKeys.RESET_PERIOD_TYPE,
                 PreferenceKeys.SCHEDULE_ENABLED,
                 PreferenceKeys.ALLOWLIST_ENABLED -> {
                     updatePreferenceDependencies()
@@ -275,6 +284,7 @@ class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedP
             val isAppEnabled = settingsManager?.isAppEnabled ?: false
             val isOnlySwipingMode = settingsManager?.blockingMode == BlockingMode.ONLY_SWIPING
             val limitType = settingsManager?.limitType ?: LimitType.SWIPE_COUNT
+            val resetPeriodType = settingsManager?.resetPeriodType ?: ResetPeriodType.PER_DAY
 
             // Show/hide swipe limiting section based on blocking mode
             val swipeLimitingCategory = findPreference<Preference>("swipe_limiting_category")
@@ -283,9 +293,13 @@ class SettingsFragment : PreferenceFragmentCompat(), SharedPreferences.OnSharedP
             // Show/hide specific limit fields based on limit type
             val swipeCountField = findPreference<EditTextPreference>(PreferenceKeys.SWIPE_LIMIT_COUNT)
             val timeLimitField = findPreference<EditTextPreference>(PreferenceKeys.TIME_LIMIT_MINUTES)
+            val resetPeriodMinutesField = findPreference<EditTextPreference>(PreferenceKeys.RESET_PERIOD_MINUTES)
 
             swipeCountField?.isVisible = isAppEnabled && isOnlySwipingMode && limitType == LimitType.SWIPE_COUNT
+            // Show time limit field only when limit type is TIME_LIMIT
             timeLimitField?.isVisible = isAppEnabled && isOnlySwipingMode && limitType == LimitType.TIME_LIMIT
+            // Show reset period minutes only when reset period is time-based (AFTER_SESSION_END) instead of day-based
+            resetPeriodMinutesField?.isVisible = isAppEnabled && isOnlySwipingMode && resetPeriodType == ResetPeriodType.AFTER_SESSION_END
 
             // Update summaries for time preferences
             updateTimeSummaries()

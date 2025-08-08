@@ -41,6 +41,9 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
             super.onServiceConnected()
             Log.d(TAG, "Accessibility service connected")
 
+            // Start persistence service to keep this service running
+            PersistenceService.start(this)
+
             initializeService()
             scheduleCacheCleanup()
         } catch (e: Exception) {

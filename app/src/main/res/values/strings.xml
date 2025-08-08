@@ -95,6 +95,12 @@
     <string name="swipe_limit_reached">Swipe limit reached (%1$d/%2$d swipes)</string>
     <string name="time_limit_reached">Time limit reached (%1$d/%2$d minutes)</string>
 
+    <!-- Persistence service notification -->
+    <string name="persistence_notification_title">NoMoreShorts is running in the background</string>
+    <string name="persistence_notification_text">Tap this notification to go to your settings</string>
+    <string name="persistence_notification_channel_name">Background Service</string>
+    <string name="persistence_notification_channel_description">Keeps NoMoreShorts accessibility service running</string>
+
     <!-- Preference keys for manage_channels (if needed in code) -->
     <string name="shorts_swipe_limit_reached">Swipe limit reached</string>
     <string name="delete_channel">Delete channel</string>

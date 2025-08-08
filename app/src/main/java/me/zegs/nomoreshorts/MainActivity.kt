@@ -24,6 +24,9 @@ class MainActivity : AppCompatActivity() {
         try {
             settingsManager = SettingsManager(this)
 
+            // Start persistence service to keep accessibility service running
+            PersistenceService.start(this)
+
             // Check accessibility permission and route accordingly
             checkPermissionAndRoute()
         } catch (e: Exception) {
