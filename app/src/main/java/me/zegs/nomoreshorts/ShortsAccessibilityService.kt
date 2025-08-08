@@ -572,6 +572,12 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
                 when (child.className) {
                     "android.support.v7.widget.RecyclerView" -> recyclerView = child
                     "android.view.ViewGroup" -> backViewGroup = child
+                    "android.widget.FrameLayout" -> {
+                        // If the second child is a ViewGroup, this is the back button
+                        if (child.childCount > 1 && child.getChild(1)?.className == "android.view.ViewGroup") {
+                            backViewGroup = child.getChild(1)
+                        }
+                    }
                 }
             }
         } catch (e: Exception) {
@@ -675,6 +681,22 @@ class ShortsAccessibilityService : AccessibilityService(), SharedPreferences.OnS
         } catch (e: Exception) {
             Log.e(TAG, "Error extracting back button", e)
             null
+        }
+    }
+
+    private fun debugPrintNode(node: AccessibilityNodeInfo?, label: String, depth: Int = 0) {
+        val indent = " ".repeat(depth)
+
+        if (node == null) {
+            Log.d(TAG, "$indent$label: null")
+            return
+        }
+
+        Log.d(TAG, "$indent$label: ${node.className} - ${node.text ?: "No text"} - ${node.contentDescription ?: "No CD"}")
+
+        for (i in 0 until node.childCount) {
+            val child = safeGetChild(node, i)
+            debugPrintNode(child, "$label $i", depth + 1)
         }
     }
 
